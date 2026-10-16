@@ -1,12 +1,14 @@
 # EPLAN AI Automation Toolkit
 
-**English** · [Español](README.es.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [中文](README.zh-CN.md) · [Русский](README.ru.md)
+**English** · [Español](README.es.md) · [Deutsch](README.de.md) · [中文](README.zh-CN.md) · [한국어](README.ko.md) · [Türkçe](README.tr.md) · [Polski](README.pl.md) · [Русский](README.ru.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Canary-ECAD/eplan-mcp)
 [![MCP Badge](https://lobehub.com/badge/mcp/covagashi-eplan_2026_ia_mcp_scripts)](https://lobehub.com/mcp/covagashi-eplan_2026_ia_mcp_scripts)
 
 AI-assisted automation for **EPLAN Electric P8** and **EPLAN EEC Pro 2026**, built on the
 Model Context Protocol (MCP).
+
+📖 **Documentation, install guide and full tool reference: [covaga.dev](https://covaga.dev)**
 
 This repository contains the local MCP server that drives a running EPLAN instance.
 The three remote documentation RAGs live in the separate
@@ -89,7 +91,8 @@ develop → deploy → test loop:
   errors and warnings the user sees in the GUI.
 - **Private extension modules** — see [below](#private-extension-modules-eplan_mcp_extensions).
 
-A tool-by-tool reference lives in [the project wiki](https://github.com/Canary-ECAD/eplan-mcp/wiki).
+A tool-by-tool reference, generated from this repository's docstrings, lives at
+[covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/).
 
 #### Discovery mode
 

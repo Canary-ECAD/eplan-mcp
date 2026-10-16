@@ -1,7 +1,10 @@
-"""One-off script: generate the GitHub wiki's tool-reference pages from the
-actual __all__ / docstrings in api/actions, grouped into reader-friendly
-categories. Run once, review the output, commit to the wiki repo by hand.
-Safe to delete afterwards."""
+"""Generate the tool-reference pages from the actual __all__ / docstrings in
+api/actions, grouped into reader-friendly categories.
+
+covaga.dev runs this on every build (scripts/sync-docs.mjs in that repo) and
+publishes the output at https://covaga.dev/docs/tools/, so the reference always
+matches the code. Keep it dependency-free and keep the WIKI_OUT_DIR variable:
+the site build points it at a temporary folder."""
 import ast
 import os
 
