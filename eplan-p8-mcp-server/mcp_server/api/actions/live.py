@@ -5,9 +5,9 @@ The action-based tools in this package drive EPLAN, but they cannot enumerate
 or mutate the object model of the loaded project: `using Eplan.EplApi.DataModel;`
 does not compile inside EPLAN's script engine (CS0234 - the engine compiles
 against a fixed assembly set). The technique that does work is runtime
-reflection over the object model, documented in the eplan-development skill's
-[API data access](https://github.com/covagashi/eplan-development-skill/blob/main/skills/eplan-p8/eplan-development/references/api-data-access.md) and
-[3D installation spaces](https://github.com/covagashi/eplan-development-skill/blob/main/skills/eplan-p8/eplan-development/references/e3d-installation-spaces.md)
+reflection over the object model, documented in the eplan-scripting skill's
+[API data access](https://github.com/Canary-ECAD/eplan-scripting-skill/blob/main/skills/eplan-p8/eplan-scripting/references/api-data-access.md) and
+[3D installation spaces](https://github.com/Canary-ECAD/eplan-scripting-skill/blob/main/skills/eplan-p8/eplan-scripting/references/e3d-installation-spaces.md)
 guides. Hold a `LockingStep` for the duration (without it every project access
 throws NoLockingStepException), and use `SelectionSet.GetCurrentProject(false)`
 to reach the project without ProjectManager.

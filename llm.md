@@ -5,11 +5,11 @@ It assumes you are connected through one or more of the MCP servers described he
 
 The local `eplan` action server is maintained in this repository. The three
 Cloudflare documentation RAG servers are maintained separately in
-[eplan-cloudflare-rags](https://github.com/covagashi/eplan-cloudflare-rags):
-[P8 2026](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-p8),
-[P8 2027](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027),
-and [EEC Pro 2026](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eecpro).
-The [eplan-development skill](https://github.com/covagashi/eplan-development-skill)
+[eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags):
+[P8 2026](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-p8),
+[P8 2027](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027),
+and [EEC Pro 2026](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eecpro).
+The [eplan-scripting skill](https://github.com/Canary-ECAD/eplan-scripting-skill)
 also has its own repository.
 
 Human-readable guides: [English](README.md) · [Español](README.es.md) ·
@@ -39,7 +39,7 @@ Use one of these whenever you are unsure of an exact action name or parameter �
 
 ## 2. The local `eplan` action server
 
-It exposes **217 tools** (full tool-by-tool reference: [the project wiki](https://github.com/covagashi/eplan-rag-mcp/wiki)):
+It exposes **217 tools** (full tool-by-tool reference: [the project wiki](https://github.com/Canary-ECAD/eplan-mcp/wiki)):
 
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,

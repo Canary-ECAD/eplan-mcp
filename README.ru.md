@@ -9,7 +9,7 @@ Model Context Protocol (MCP).
 
 Этот репозиторий содержит локальный MCP-сервер, управляющий запущенным EPLAN.
 Три удалённых RAG-сервера документации находятся в отдельном репозитории
-[eplan-cloudflare-rags](https://github.com/covagashi/eplan-cloudflare-rags).
+[eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags).
 
 > Работаете здесь вместе с языковой моделью? Прочитайте [`llm.md`](llm.md) — там на языке,
 > обращённом к LLM, описано всё, что этот набор инструментов умеет и что в нём настраивается.
@@ -24,8 +24,8 @@ Model Context Protocol (MCP).
 | Компонент | Тип | Назначение | Продукт EPLAN |
 |---|---|---|---|
 | `eplan-p8-mcp-server/` | Локальный MCP на Python | Управление запущенным экземпляром EPLAN из Claude: открытие и закрытие проектов, экспорт, отчёты, скрипты | EPLAN Electric P8 |
-| [**eplan-cloudflare-rags**](https://github.com/covagashi/eplan-cloudflare-rags) | Удалённые Cloudflare Workers, отдельный репозиторий | Документация P8 2026, P8 2027 и EEC Pro через MCP и REST | EPLAN Electric P8 и EEC Pro |
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | Навык Claude Code, отдельный репозиторий | Учит Claude писать корректные скрипты EPLAN, код API и приложения Remote Client | EPLAN Electric P8 |
+| [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | Удалённые Cloudflare Workers, отдельный репозиторий | Документация P8 2026, P8 2027 и EEC Pro через MCP и REST | EPLAN Electric P8 и EEC Pro |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Навык Claude Code, отдельный репозиторий | Учит Claude писать корректные скрипты EPLAN, код API и приложения Remote Client | EPLAN Electric P8 |
 
 У каждого репозитория есть собственный README с деталями установки и использования.
 
@@ -48,7 +48,7 @@ claude mcp list   # в списке должен появиться "eplan"
 Затем запустите EPLAN, откройте Claude Code и напишите `connect to eplan`. Полное руководство —
 в [`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md).
 
-![Claude CLI configured](image.png)
+![Claude CLI configured](assets/claude-cli-configured.png)
 
 #### Предварительное условие
 
@@ -56,7 +56,7 @@ claude mcp list   # в списке должен появиться "eplan"
 **Разрешить удалённый доступ через Remote Client** в разделе **Файл → Настройки… → Рабочее
 место → Интерфейсы → Удалённый доступ**.
 
-![Allow remote access via Remote Client](Remoting_Setting_AllowLocalAccess.png)
+![Allow remote access via Remote Client](assets/remoting-allow-local-access.png)
 
 #### Что предоставляет сервер
 
@@ -90,7 +90,7 @@ claude mcp list   # в списке должен появиться "eplan"
   предупреждения, которые пользователь видит в интерфейсе.
 - **Приватные модули расширений** — см. [ниже](#приватные-модули-расширений-eplan_mcp_extensions).
 
-Справочник по каждому инструменту — в [вики проекта](https://github.com/covagashi/eplan-rag-mcp/wiki).
+Справочник по каждому инструменту — в [вики проекта](https://github.com/Canary-ECAD/eplan-mcp/wiki).
 
 #### Режим discovery
 
@@ -122,7 +122,7 @@ claude mcp add eplan-wiki-2027 -- cmd /c npx mcp-remote https://rag2027.covaga.x
 
 `eplan-wiki-2027` — намеренно отдельный сервер, а не обновление `eplan-rag` с 2026 на 2027: он
 индексирует другую версию документации *и* использует другой режим поиска (SQLite FTS5/bm25 по
-вики, входящей в [`cloudflare-rag-eplan-2027/`](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027), вместо
+вики, входящей в [`cloudflare-rag-eplan-2027/`](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027), вместо
 семантического поиска Vectorize + bge). При прямом сравнении на реальных запросах они ошибаются
 по-разному: FTS5 выигрывает при поиске точного имени («какая сигнатура у X»), семантический
 поиск — когда в запросе вообще нет слов из документации. Ставьте оба.
@@ -139,13 +139,13 @@ curl -X POST https://rag2027.covaga.xyz/search -H "Content-Type: application/jso
 ```
 
 Инструменты, REST-эндпоинты и архитектура описаны в
-[`cloudflare-rag-eplan-p8/README.md`](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md) и
-[`cloudflare-rag-eecpro/README.md`](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md).
+[`cloudflare-rag-eplan-p8/README.md`](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md) и
+[`cloudflare-rag-eecpro/README.md`](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md).
 
 ### Навык Claude Code для разработки под EPLAN
 
 MCP-серверы позволяют Claude *действовать* в EPLAN. Навык
-[**eplan-development**](https://github.com/covagashi/eplan-development-skill) учит его *писать
+[**eplan-scripting**](https://github.com/Canary-ECAD/eplan-scripting-skill) учит его *писать
 корректный код для EPLAN*: точки входа скриптов, проверенные параметры действий, доступ к базе
 изделий, автоматизация Remote Client (динамические порты, EPLAN без интерфейса, Cogineer) — и
 подводные камни, которые проявляются только в реальной работе: псевдоасинхронная блокировка
@@ -157,19 +157,14 @@ MCP-серверы позволяют Claude *действовать* в EPLAN. 
 отсюда.
 
 ```
-/plugin marketplace add covagashi/eplan-development-skill
-/plugin install eplan-development@eplan-skills
-```
-
-Этот репозиторий также является каталогом плагинов, и его запись указывает на тот же репозиторий:
-
-```
-/plugin marketplace add covagashi/eplan-rag-mcp
-/plugin install eplan-development@eplan-tools
+/plugin marketplace add Canary-ECAD/eplan-mcp
+/plugin install eplan@eplan-tools            # router + all skills + doc RAGs
+/plugin install eplan-scripting@eplan-tools  # Electric P8 only
+/plugin install eec-pro@eplan-tools          # EEC Pro only
 ```
 
 Ручная установка и подробности:
-[README навыка](https://github.com/covagashi/eplan-development-skill#readme).
+[README навыка](https://github.com/Canary-ECAD/eplan-scripting-skill#readme).
 
 ## Добавление новых действий EPLAN
 
@@ -214,7 +209,7 @@ def open_project(project_path: str, open_mode: str = None) -> dict:
 python eplan-p8-mcp-server/tools/validate_actions.py
 ```
 
-![EPLAN test](image-1.png)
+![EPLAN test](assets/eplan-test.png)
 
 ### Советы
 
@@ -237,7 +232,7 @@ python eplan-p8-mcp-server/tools/validate_actions.py
 так же, как встроенные действия:
 
 ```python
-# my_company_tools.py  (в приватном репозитории, НЕ в eplan-rag-mcp)
+# my_company_tools.py  (в приватном репозитории, НЕ в eplan-mcp)
 TOOL_PREFIX = "acme_"          # необязательно, по умолчанию "eplan_"
 __all__ = ["run_smoke_test"]
 
@@ -292,7 +287,7 @@ def run_smoke_test(project_path: str) -> dict:
 
 | Репозиторий | Что это |
 |---|---|
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | Тот самый навык Claude Code, отдельно и без привязки к окружению. Установка: `/plugin marketplace add covagashi/eplan-development-skill`. |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Тот самый навык Claude Code, отдельно и без привязки к окружению. Установка: `/plugin marketplace add Canary-ECAD/eplan-mcp`. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | Добавление собственных пунктов в контекстные меню EPLAN и чтение строки, по которой щёлкнул пользователь. Инструмент разведки плюс рабочий пример. |
 
 ## Ресурсы
@@ -303,4 +298,6 @@ def run_smoke_test(project_path: str) -> dict:
 
 ## Лицензия
 
-MIT — см. [`license`](license).
+MIT — см. [`LICENSE`](LICENSE).
+
+> **Примечание:** это независимый проект сообщества [Canary E-cad](https://github.com/Canary-ECAD). Он не связан с EPLAN GmbH & Co. KG и не одобрен и не поддерживается ею. EPLAN, EPLAN Electric P8 и EPLAN EEC Pro — товарные знаки соответствующего владельца.

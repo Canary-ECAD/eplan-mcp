@@ -8,7 +8,7 @@ agent can do the whole cycle (close project, exit EPLAN, swap the DLL,
 relaunch, reconnect, reopen the project) without a human at the keyboard.
 
 Implementation notes (verified against the P8 docs RAG and the
-eplan-development skill's remoting reference):
+eplan-scripting skill's remoting reference):
 - EplanRemoteClient.StartEplan() relies on the removed EplanServer action on
   EPLAN 2025+ and does NOT work there. The reliable way is to launch
   EPLAN.exe ourselves and discover listening ports owned by that process.

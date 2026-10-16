@@ -226,7 +226,7 @@ as a second data point, not a correction.
   reliable non-interactive page-listing or page-creation path in the current
   tool surface. `execute_custom_script` was tried for this and hit an
   unrelated, separately-reported issue (compile-error timeouts — see the
-  `eplan-development` skill's `pitfalls.md` #9), so this one is a tooling gap
+  `eplan-scripting` skill's `pitfalls.md` #9), so this one is a tooling gap
   in the test harness, not a finding about the action itself.
 
 **An important caveat on availability data.** `ActionManager.FindAction`

@@ -1,37 +1,74 @@
 {
   "name": "eplan-tools",
   "owner": {
-    "name": "covagashi",
-    "url": "https://github.com/covagashi"
+    "name": "Canary E-cad",
+    "url": "https://github.com/Canary-ECAD"
   },
   "metadata": {
-    "description": "Local EPLAN MCP server with links to development skills and documentation RAGs",
-    "version": "1.1.0"
+    "description": "The Canary E-cad plugin marketplace for EPLAN Electric P8 and EEC Pro: agent skills for scripting, the EPLAN API and Remote Client, plus the documentation RAG MCP servers.",
+    "version": "2.0.0"
   },
   "plugins": [
     {
-      "name": "eplan-development",
+      "name": "eplan",
       "source": {
         "source": "github",
-        "repo": "covagashi/eplan-development-skill"
+        "repo": "Canary-ECAD/eplan-scripting-skill"
       },
-      "description": "Teach Claude to develop with EPLAN Electric P8: C# scripting, EPLAN API (parts database, 3D), Remote Client automation, verified action parameters, and production pitfalls. Covers EPLAN 2022-2027.",
-      "version": "1.2.0",
+      "description": "Everything: the router plus all EPLAN skills (Electric P8 scripting, API and Remote Client; EEC Pro typicals, formulas and generation) and the three documentation RAG MCP servers.",
+      "version": "2.0.0",
       "author": {
-        "name": "covagashi",
-        "url": "https://github.com/covagashi"
+        "name": "Canary E-cad",
+        "url": "https://github.com/Canary-ECAD"
       },
+      "homepage": "https://covaga.dev",
       "license": "MIT",
-      "keywords": [
-        "eplan",
-        "eplan-p8",
-        "electrical-engineering",
-        "csharp",
-        "automation"
-      ],
+      "keywords": ["eplan", "eplan-p8", "eplan-electric-p8", "eec-pro", "electrical-engineering", "csharp", "automation"],
       "category": "development",
       "strict": false,
-      "skills": ["./skills/eplan-p8/eplan-development"]
+      "skills": [
+        "./router",
+        "./skills/eplan-p8/eplan-scripting",
+        "./skills/eec-pro/eec-pro-development"
+      ]
+    },
+    {
+      "name": "eplan-scripting",
+      "source": {
+        "source": "github",
+        "repo": "Canary-ECAD/eplan-scripting-skill"
+      },
+      "description": "EPLAN Electric P8 only: C# scripting, the EPLAN API (parts database, 3D), Remote Client automation, verified action parameters and production pitfalls. Covers EPLAN 2022-2027.",
+      "version": "2.0.0",
+      "author": {
+        "name": "Canary E-cad",
+        "url": "https://github.com/Canary-ECAD"
+      },
+      "homepage": "https://covaga.dev",
+      "license": "MIT",
+      "keywords": ["eplan", "eplan-p8", "eplan-api", "eplan-scripting", "csharp", "automation"],
+      "category": "development",
+      "strict": false,
+      "skills": ["./skills/eplan-p8/eplan-scripting"]
+    },
+    {
+      "name": "eec-pro",
+      "source": {
+        "source": "github",
+        "repo": "Canary-ECAD/eplan-scripting-skill"
+      },
+      "description": "EPLAN EEC Pro 2026 only: typicals and the mechatronic model, the formula language, configuration interfaces, scripting, and generation into P8 / Pro Panel / PLC / text targets.",
+      "version": "2.0.0",
+      "author": {
+        "name": "Canary E-cad",
+        "url": "https://github.com/Canary-ECAD"
+      },
+      "homepage": "https://covaga.dev",
+      "license": "MIT",
+      "keywords": ["eplan", "eec-pro", "typicals", "electrical-engineering", "automation"],
+      "category": "development",
+      "strict": false,
+      "skills": ["./skills/eec-pro/eec-pro-development"]
     }
   ]
 }

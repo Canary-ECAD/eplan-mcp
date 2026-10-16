@@ -2,12 +2,12 @@
 
 [English](README.md) · **Español** · [한국어](README.ko.md) · [Deutsch](README.de.md) · [中文](README.zh-CN.md) · [Русский](README.ru.md)
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/covagashi/eplan-rag-mcp)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Canary-ECAD/eplan-mcp)
 [![MCP Badge](https://lobehub.com/badge/mcp/covagashi-eplan_2026_ia_mcp_scripts)](https://lobehub.com/mcp/covagashi-eplan_2026_ia_mcp_scripts)
 
 Automatización asistida por IA para **EPLAN Electric P8** y **EPLAN EEC Pro 2026**, basada en el Model Context Protocol (MCP).
 
-Este repositorio contiene el servidor MCP local que controla una instancia de EPLAN en ejecución. Los tres RAG remotos de documentación están en el repositorio independiente [eplan-cloudflare-rags](https://github.com/covagashi/eplan-cloudflare-rags).
+Este repositorio contiene el servidor MCP local que controla una instancia de EPLAN en ejecución. Los tres RAG remotos de documentación están en el repositorio independiente [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags).
 
 > ¿Trabajas aquí con un LLM? Lee [`llm.md`](llm.md): describe para el modelo todas las funciones y opciones de configuración del kit.
 
@@ -21,8 +21,8 @@ Este repositorio contiene el servidor MCP local que controla una instancia de EP
 | Componente | Tipo | Función | Producto EPLAN |
 |---|---|---|---|
 | `eplan-p8-mcp-server/` | MCP local en Python | Controlar una instancia de EPLAN desde Claude: abrir/cerrar proyectos, exportaciones, informes y scripts | EPLAN Electric P8 |
-| [**eplan-cloudflare-rags**](https://github.com/covagashi/eplan-cloudflare-rags) | Cloudflare Workers remotos, repositorio independiente | Servir la documentación de P8 2026, P8 2027 y EEC Pro mediante MCP y REST | EPLAN Electric P8 y EEC Pro |
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | Skill de Claude Code, repositorio independiente | Ayudar a Claude a escribir scripts, código API y aplicaciones Remote Client correctos | EPLAN Electric P8 |
+| [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | Cloudflare Workers remotos, repositorio independiente | Servir la documentación de P8 2026, P8 2027 y EEC Pro mediante MCP y REST | EPLAN Electric P8 y EEC Pro |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Skill de Claude Code, repositorio independiente | Ayudar a Claude a escribir scripts, código API y aplicaciones Remote Client correctos | EPLAN Electric P8 |
 
 Cada repositorio tiene su propio README con instrucciones de instalación y uso.
 
@@ -42,13 +42,13 @@ claude mcp list   # debe mostrar "eplan"
 
 Después, inicia EPLAN, abre Claude Code y di `connect to eplan`. La guía completa está en [`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md).
 
-![Claude CLI configurado](image.png)
+![Claude CLI configurado](assets/claude-cli-configured.png)
 
 #### Requisito previo
 
 Antes de conectar el servidor, habilita el acceso remoto en EPLAN: activa **Allow remote access via Remote Client** en **File → Settings… → Workstation → Interfaces → Remote access**.
 
-![Permitir acceso remoto mediante Remote Client](Remoting_Setting_AllowLocalAccess.png)
+![Permitir acceso remoto mediante Remote Client](assets/remoting-allow-local-access.png)
 
 #### Herramientas disponibles
 
@@ -72,7 +72,7 @@ El conjunto también permite un ciclo desatendido de desarrollo → despliegue �
 - **Diagnóstico:** `eplan_get_system_messages` lee el árbol de mensajes, incluidos los errores y avisos visibles en la interfaz.
 - **Extensiones privadas:** consulta [la sección correspondiente](#modulos-de-extension-privados-eplan_mcp_extensions).
 
-La [wiki del proyecto](https://github.com/covagashi/eplan-rag-mcp/wiki) contiene la referencia de cada herramienta.
+La [wiki del proyecto](https://github.com/Canary-ECAD/eplan-mcp/wiki) contiene la referencia de cada herramienta.
 
 #### Modo discovery
 
@@ -95,7 +95,7 @@ claude mcp add eecpro-rag -- cmd /c npx mcp-remote https://rageecpro.covaga.xyz/
 claude mcp add eplan-wiki-2027 -- cmd /c npx mcp-remote https://rag2027.covaga.xyz/mcp
 ```
 
-`eplan-wiki-2027` es un servidor separado, no una actualización de `eplan-rag` de 2026 a 2027: indexa otra versión de la documentación y emplea otro método de búsqueda (FTS5/bm25 de SQLite sobre [la wiki incluida](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027), frente a Vectorize + bge para búsqueda semántica). Las pruebas con consultas reales muestran comportamientos complementarios: FTS5 destaca al buscar nombres exactos («¿cuál es la firma de X?»); la búsqueda semántica funciona mejor cuando la consulta no comparte vocabulario con la documentación. Instala ambos.
+`eplan-wiki-2027` es un servidor separado, no una actualización de `eplan-rag` de 2026 a 2027: indexa otra versión de la documentación y emplea otro método de búsqueda (FTS5/bm25 de SQLite sobre [la wiki incluida](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027), frente a Vectorize + bge para búsqueda semántica). Las pruebas con consultas reales muestran comportamientos complementarios: FTS5 destaca al buscar nombres exactos («¿cuál es la firma de X?»); la búsqueda semántica funciona mejor cuando la consulta no comparte vocabulario con la documentación. Instala ambos.
 
 También hay una API REST para verificar nombres de acciones y parámetros mientras desarrollas:
 
@@ -107,27 +107,22 @@ curl -X POST https://rag2027.covaga.xyz/search -H "Content-Type: application/jso
      -d '{"query": "FindAction", "topK": 3}'
 ```
 
-Consulta [el README del RAG P8 2026](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md) y [el del RAG EEC Pro](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md) para conocer herramientas, endpoints REST y arquitectura.
+Consulta [el README del RAG P8 2026](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md) y [el del RAG EEC Pro](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md) para conocer herramientas, endpoints REST y arquitectura.
 
 ### Skill de Claude Code para desarrollar en EPLAN
 
-Los servidores MCP permiten a Claude *actuar* sobre EPLAN. La skill [**eplan-development**](https://github.com/covagashi/eplan-development-skill) le enseña a *escribir código EPLAN correcto*: puntos de entrada de scripts, parámetros de acciones verificados, acceso a la base de datos de artículos, automatización con Remote Client (puertos dinámicos, EPLAN sin interfaz, Cogineer) y problemas de producción como el bloqueo de comandos pseudoasíncronos, el hilo de supervisión del bucle de mensajes, la liberación de recursos y los cambios de remoting de EPLAN 2025.
+Los servidores MCP permiten a Claude *actuar* sobre EPLAN. La skill [**eplan-scripting**](https://github.com/Canary-ECAD/eplan-scripting-skill) le enseña a *escribir código EPLAN correcto*: puntos de entrada de scripts, parámetros de acciones verificados, acceso a la base de datos de artículos, automatización con Remote Client (puertos dinámicos, EPLAN sin interfaz, Cogineer) y problemas de producción como el bloqueo de comandos pseudoasíncronos, el hilo de supervisión del bucle de mensajes, la liberación de recursos y los cambios de remoting de EPLAN 2025.
 
 La skill vive en su propio repositorio y es **independiente del entorno anfitrión**: no presupone un servidor MCP, un ejecutor de scripts ni un índice de documentación concretos. Puede utilizarse por sí sola.
 
 ```text
-/plugin marketplace add covagashi/eplan-development-skill
-/plugin install eplan-development@eplan-skills
+/plugin marketplace add Canary-ECAD/eplan-mcp
+/plugin install eplan@eplan-tools            # router + all skills + doc RAGs
+/plugin install eplan-scripting@eplan-tools  # Electric P8 only
+/plugin install eec-pro@eplan-tools          # EEC Pro only
 ```
 
-Este repositorio también funciona como marketplace de plugins y apunta a la misma skill:
-
-```text
-/plugin marketplace add covagashi/eplan-rag-mcp
-/plugin install eplan-development@eplan-tools
-```
-
-La instalación manual y otros detalles están en [el README de la skill](https://github.com/covagashi/eplan-development-skill#readme).
+La instalación manual y otros detalles están en [el README de la skill](https://github.com/Canary-ECAD/eplan-scripting-skill#readme).
 
 ## Añadir nuevas acciones de EPLAN
 
@@ -168,7 +163,7 @@ La nueva herramienta estará disponible cuando reinicies Claude o el servidor.
 python eplan-p8-mcp-server/tools/validate_actions.py
 ```
 
-![Prueba de EPLAN](image-1.png)
+![Prueba de EPLAN](assets/eplan-test.png)
 
 ### Consejos
 
@@ -183,7 +178,7 @@ El servidor puede cargar **módulos de herramientas externos al repositorio**: u
 Define `EPLAN_MCP_EXTENSIONS` con uno o varios directorios (separados por `;` en Windows). Al iniciarse, importa los archivos `*.py` del nivel superior cuyo nombre no empiece por `_` y registra las funciones de su lista `__all__` como herramientas MCP:
 
 ```python
-# my_company_tools.py (en un repositorio privado, NO en eplan-rag-mcp)
+# my_company_tools.py (en un repositorio privado, NO en eplan-mcp)
 TOOL_PREFIX = "acme_"          # opcional; valor predeterminado: "eplan_"
 __all__ = ["run_smoke_test"]
 
@@ -223,7 +218,7 @@ Notas:
 
 | Repositorio | Descripción |
 |---|---|
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | Skill independiente de Claude Code; instala con `/plugin marketplace add covagashi/eplan-development-skill`. |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Skill independiente de Claude Code; instala con `/plugin marketplace add Canary-ECAD/eplan-mcp`. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | Añade entradas al menú contextual de EPLAN y consulta la fila seleccionada; incluye una herramienta de exploración y un ejemplo. |
 
 ## Recursos
@@ -234,4 +229,6 @@ Notas:
 
 ## Licencia
 
-MIT — consulta [`license`](license).
+MIT — consulta [`LICENSE`](LICENSE).
+
+> **Aviso:** este es un proyecto comunitario independiente de [Canary E-cad](https://github.com/Canary-ECAD). No está afiliado, respaldado ni soportado por EPLAN GmbH & Co. KG. EPLAN, EPLAN Electric P8 y EPLAN EEC Pro son marcas de su respectivo propietario.

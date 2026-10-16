@@ -4,7 +4,7 @@ E3D / 3D layout space actions.
 These reach the EPLAN DataModel.E3D object model through runtime reflection
 because the script engine only compiles Base/ApplicationFramework (direct
 references to DataModel/HEServices fail with CS0234). The techniques used here
-were proven interactively (see the eplan-development skill reference
+were proven interactively (see the eplan-scripting skill reference
 `e3d-installation-spaces.md`):
 
 - create_installation_space: headless InstallationSpace.Create

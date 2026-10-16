@@ -6,7 +6,7 @@
 
 面向 **EPLAN Electric P8** 与 **EPLAN EEC Pro 2026** 的 AI 辅助自动化工具，基于模型上下文协议（MCP）构建。
 
-本仓库包含直接驱动 EPLAN 实例的本地 MCP 服务器。三个远程文档 RAG 位于独立的 [eplan-cloudflare-rags](https://github.com/covagashi/eplan-cloudflare-rags) 仓库。
+本仓库包含直接驱动 EPLAN 实例的本地 MCP 服务器。三个远程文档 RAG 位于独立的 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags) 仓库。
 
 > 正在和大语言模型一起使用本仓库？请阅读 [`llm.md`](llm.md) —— 它以面向 LLM 的方式
 > 说明了本工具包能做什么、可配置哪些内容。
@@ -21,8 +21,8 @@
 | 组件 | 类型 | 用途 | 适用的 EPLAN 产品 |
 |---|---|---|---|
 | `eplan-p8-mcp-server/` | 本地 Python MCP | 从 Claude 驱动正在运行的 EPLAN 实例：打开/关闭项目、导出、报表、脚本 | EPLAN Electric P8 |
-| [**eplan-cloudflare-rags**](https://github.com/covagashi/eplan-cloudflare-rags) | 独立仓库中的远程 Cloudflare Workers | 通过 MCP 和 REST 提供 P8 2026、P8 2027 与 EEC Pro 文档检索 | EPLAN Electric P8 与 EEC Pro |
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | Claude Code Skill，独立仓库 | 教 Claude 写出正确的 EPLAN 脚本、API 代码和 Remote Client 应用 | EPLAN Electric P8 |
+| [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | 独立仓库中的远程 Cloudflare Workers | 通过 MCP 和 REST 提供 P8 2026、P8 2027 与 EEC Pro 文档检索 | EPLAN Electric P8 与 EEC Pro |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Claude Code Skill，独立仓库 | 教 Claude 写出正确的 EPLAN 脚本、API 代码和 Remote Client 应用 | EPLAN Electric P8 |
 
 每个仓库都有各自的 README，其中包含安装和使用的详细说明。
 
@@ -43,13 +43,13 @@ claude mcp list   # 应当能列出 "eplan"
 随后启动 EPLAN，打开 Claude Code，并输入 `connect to eplan`。完整指南见
 [`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md)。
 
-![Claude CLI configured](image.png)
+![Claude CLI configured](assets/claude-cli-configured.png)
 
 #### 使用前提
 
 服务器连接之前，必须先在 EPLAN 中启用远程控制：在 **文件 → 设置… → 工作站 → 接口 → 远程访问** 中打开 **允许通过 Remote Client 进行远程访问**。
 
-![Allow remote access via Remote Client](Remoting_Setting_AllowLocalAccess.png)
+![Allow remote access via Remote Client](assets/remoting-allow-local-access.png)
 
 #### 服务器提供哪些工具
 
@@ -75,7 +75,7 @@ claude mcp list   # 应当能列出 "eplan"
 - **诊断** —— `eplan_get_system_messages`：读取 EPLAN 的消息树，看到与用户在界面上看到的完全相同的错误与警告。
 - **私有扩展模块** —— 见[下文](#私有扩展模块eplan_mcp_extensions)。
 
-逐个工具的完整清单见 [项目 Wiki](https://github.com/covagashi/eplan-rag-mcp/wiki)。
+逐个工具的完整清单见 [项目 Wiki](https://github.com/Canary-ECAD/eplan-mcp/wiki)。
 
 #### Discovery 模式
 
@@ -99,7 +99,7 @@ claude mcp add eecpro-rag -- cmd /c npx mcp-remote https://rageecpro.covaga.xyz/
 claude mcp add eplan-wiki-2027 -- cmd /c npx mcp-remote https://rag2027.covaga.xyz/mcp
 ```
 
-`eplan-wiki-2027` 是一个独立的服务，而不是 `eplan-rag` 从 2026 到 2027 的升级版：它索引的文档版本不同，*并且*检索方式也不同（对 [`cloudflare-rag-eplan-2027/`](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027) 内置维基使用 SQLite FTS5/bm25 关键词匹配，而非 Vectorize + bge 语义搜索）。在真实问题上做过正面对比，两者的失效方式不同：精确名称查询（「X 的方法签名是什么」）FTS5 更准，而当提问完全不含文档原词时语义搜索更强。建议两个都装。
+`eplan-wiki-2027` 是一个独立的服务，而不是 `eplan-rag` 从 2026 到 2027 的升级版：它索引的文档版本不同，*并且*检索方式也不同（对 [`cloudflare-rag-eplan-2027/`](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027) 内置维基使用 SQLite FTS5/bm25 关键词匹配，而非 Vectorize + bge 语义搜索）。在真实问题上做过正面对比，两者的失效方式不同：精确名称查询（「X 的方法签名是什么」）FTS5 更准，而当提问完全不含文档原词时语义搜索更强。建议两个都装。
 
 两者同时提供普通的 REST API，在开发过程中用于核对 EPLAN 操作名称和参数非常方便：
 
@@ -111,27 +111,22 @@ curl -X POST https://rag2027.covaga.xyz/search -H "Content-Type: application/jso
      -d '{"query": "FindAction", "topK": 3}'
 ```
 
-工具、REST 接口和架构说明见 [`cloudflare-rag-eplan-p8/README.md`](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md) 与 [`cloudflare-rag-eecpro/README.md`](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md)。
+工具、REST 接口和架构说明见 [`cloudflare-rag-eplan-p8/README.md`](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md) 与 [`cloudflare-rag-eecpro/README.md`](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md)。
 
 ### 用于 EPLAN 开发的 Claude Code Skill
 
-MCP 服务器让 Claude 能够对 EPLAN *执行操作*；而 [**eplan-development**](https://github.com/covagashi/eplan-development-skill) 这个 Skill 则教会它 *写出正确的 EPLAN 代码*：脚本入口点、经过验证的操作参数、部件数据库访问、Remote Client 自动化（动态端口、无界面 EPLAN、Cogineer），以及生产环境中的各种陷阱 —— 伪异步命令阻塞、消息循环监视线程、dispose 规范、EPLAN 2025 remoting 的变化。
+MCP 服务器让 Claude 能够对 EPLAN *执行操作*；而 [**eplan-scripting**](https://github.com/Canary-ECAD/eplan-scripting-skill) 这个 Skill 则教会它 *写出正确的 EPLAN 代码*：脚本入口点、经过验证的操作参数、部件数据库访问、Remote Client 自动化（动态端口、无界面 EPLAN、Cogineer），以及生产环境中的各种陷阱 —— 伪异步命令阻塞、消息循环监视线程、dispose 规范、EPLAN 2025 remoting 的变化。
 
 该 Skill 拥有自己的独立仓库，并且刻意做到**与宿主无关**：它不假定任何 MCP 服务器、任何特定的脚本执行器或任何特定的文档索引，因此无论你是否使用本仓库的其他部分，它都可以单独使用。
 
 ```
-/plugin marketplace add covagashi/eplan-development-skill
-/plugin install eplan-development@eplan-skills
+/plugin marketplace add Canary-ECAD/eplan-mcp
+/plugin install eplan@eplan-tools            # router + all skills + doc RAGs
+/plugin install eplan-scripting@eplan-tools  # Electric P8 only
+/plugin install eec-pro@eplan-tools          # EEC Pro only
 ```
 
-本仓库同时也是一个插件市场，其中的条目指向同一份独立 Skill：
-
-```
-/plugin marketplace add covagashi/eplan-rag-mcp
-/plugin install eplan-development@eplan-tools
-```
-
-手动安装方式和更多细节见 [该 Skill 的 README](https://github.com/covagashi/eplan-development-skill#readme)。
+手动安装方式和更多细节见 [该 Skill 的 README](https://github.com/Canary-ECAD/eplan-scripting-skill#readme)。
 
 ## 添加新的 EPLAN 操作
 
@@ -172,7 +167,7 @@ def open_project(project_path: str, open_mode: str = None) -> dict:
 python eplan-p8-mcp-server/tools/validate_actions.py
 ```
 
-![EPLAN test](image-1.png)
+![EPLAN test](assets/eplan-test.png)
 
 ### 小贴士
 
@@ -187,7 +182,7 @@ python eplan-p8-mcp-server/tools/validate_actions.py
 把 `EPLAN_MCP_EXTENSIONS` 环境变量指向一个或多个目录（Windows 上用 `;` 分隔）。其中所有不以 `_` 开头的顶层 `*.py` 文件都会在启动时被导入，其 `__all__` 中的函数会像内置操作一样被注册为 MCP 工具：
 
 ```python
-# my_company_tools.py  （位于私有仓库，而非 eplan-rag-mcp 中）
+# my_company_tools.py  （位于私有仓库，而非 eplan-mcp 中）
 TOOL_PREFIX = "acme_"          # 可选，默认为 "eplan_"
 __all__ = ["run_smoke_test"]
 
@@ -227,7 +222,7 @@ def run_smoke_test(project_path: str) -> dict:
 
 | 仓库 | 内容 |
 |---|---|
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | 上文那个 Claude Code Skill 的独立、与宿主无关的版本。用 `/plugin marketplace add covagashi/eplan-development-skill` 安装。 |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | 上文那个 Claude Code Skill 的独立、与宿主无关的版本。用 `/plugin marketplace add Canary-ECAD/eplan-mcp` 安装。 |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | 向 EPLAN 的右键菜单添加自己的条目，并读取用户点击的那一行。包含一个探测工具和一个完整示例。 |
 
 ## 相关资源
@@ -238,4 +233,6 @@ def run_smoke_test(project_path: str) -> dict:
 
 ## 许可证
 
-MIT —— 见 [`license`](license)。
+MIT —— 见 [`LICENSE`](LICENSE)。
+
+> **声明：** 本项目是 [Canary E-cad](https://github.com/Canary-ECAD) 的独立社区项目，与 EPLAN GmbH & Co. KG 无任何关联，也未获其认可或支持。EPLAN、EPLAN Electric P8 和 EPLAN EEC Pro 是其各自所有者的商标。

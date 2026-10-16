@@ -2,12 +2,12 @@
 
 [English](README.md) · [Español](README.es.md) · **한국어** · [Deutsch](README.de.md) · [中文](README.zh-CN.md) · [Русский](README.ru.md)
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/covagashi/eplan-rag-mcp)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Canary-ECAD/eplan-mcp)
 [![MCP Badge](https://lobehub.com/badge/mcp/covagashi-eplan_2026_ia_mcp_scripts)](https://lobehub.com/mcp/covagashi-eplan_2026_ia_mcp_scripts)
 
 Model Context Protocol(MCP)을 기반으로 **EPLAN Electric P8** 및 **EPLAN EEC Pro 2026**을 AI로 자동화하는 도구 모음입니다.
 
-이 저장소에는 실행 중인 EPLAN 인스턴스를 제어하는 로컬 MCP 서버가 있습니다. 세 가지 원격 문서 RAG는 별도 저장소인 [eplan-cloudflare-rags](https://github.com/covagashi/eplan-cloudflare-rags)에 있습니다.
+이 저장소에는 실행 중인 EPLAN 인스턴스를 제어하는 로컬 MCP 서버가 있습니다. 세 가지 원격 문서 RAG는 별도 저장소인 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags)에 있습니다.
 
 > 여기서 LLM을 사용하나요? [`llm.md`](llm.md)에서 모델이 수행하고 설정할 수 있는 모든 기능을 확인하세요.
 
@@ -21,8 +21,8 @@ Model Context Protocol(MCP)을 기반으로 **EPLAN Electric P8** 및 **EPLAN EE
 | 구성 요소 | 유형 | 역할 | EPLAN 제품 |
 |---|---|---|---|
 | `eplan-p8-mcp-server/` | 로컬 Python MCP | Claude에서 실행 중인 EPLAN 제어: 프로젝트 열기/닫기, 내보내기, 보고서, 스크립트 | EPLAN Electric P8 |
-| [**eplan-cloudflare-rags**](https://github.com/covagashi/eplan-cloudflare-rags) | 원격 Cloudflare Workers, 별도 저장소 | P8 2026, P8 2027, EEC Pro 문서를 MCP 및 REST로 제공 | EPLAN Electric P8 및 EEC Pro |
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | Claude Code 스킬, 별도 저장소 | Claude가 올바른 EPLAN 스크립트, API 코드, Remote Client 앱을 작성하도록 지원 | EPLAN Electric P8 |
+| [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | 원격 Cloudflare Workers, 별도 저장소 | P8 2026, P8 2027, EEC Pro 문서를 MCP 및 REST로 제공 | EPLAN Electric P8 및 EEC Pro |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Claude Code 스킬, 별도 저장소 | Claude가 올바른 EPLAN 스크립트, API 코드, Remote Client 앱을 작성하도록 지원 | EPLAN Electric P8 |
 
 각 저장소에는 설치 및 사용 방법을 설명하는 자체 README가 있습니다.
 
@@ -42,13 +42,13 @@ claude mcp list   # "eplan"이 표시되어야 함
 
 그다음 EPLAN을 실행하고 Claude Code를 열어 `connect to eplan`이라고 요청하세요. 전체 안내는 [`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md)에 있습니다.
 
-![설정된 Claude CLI](image.png)
+![설정된 Claude CLI](assets/claude-cli-configured.png)
 
 #### 사전 요구 사항
 
 서버를 연결하기 전에 EPLAN의 **File → Settings… → Workstation → Interfaces → Remote access**에서 **Allow remote access via Remote Client**를 켜야 합니다.
 
-![Remote Client를 통한 원격 액세스 허용](Remoting_Setting_AllowLocalAccess.png)
+![Remote Client를 통한 원격 액세스 허용](assets/remoting-allow-local-access.png)
 
 #### 서버에서 제공하는 도구
 
@@ -72,7 +72,7 @@ claude mcp list   # "eplan"이 표시되어야 함
 - **진단:** `eplan_get_system_messages`로 GUI에 표시되는 것과 같은 오류 및 경고의 메시지 트리를 읽습니다.
 - **비공개 확장 모듈:** [아래 설명](#비공개-확장-모듈-eplan_mcp_extensions)을 참조하세요.
 
-도구별 세부 정보는 [프로젝트 위키](https://github.com/covagashi/eplan-rag-mcp/wiki)에 있습니다.
+도구별 세부 정보는 [프로젝트 위키](https://github.com/Canary-ECAD/eplan-mcp/wiki)에 있습니다.
 
 #### Discovery 모드
 
@@ -95,7 +95,7 @@ claude mcp add eecpro-rag -- cmd /c npx mcp-remote https://rageecpro.covaga.xyz/
 claude mcp add eplan-wiki-2027 -- cmd /c npx mcp-remote https://rag2027.covaga.xyz/mcp
 ```
 
-`eplan-wiki-2027`은 `eplan-rag`의 2026 → 2027 업그레이드가 아니라 별도 서버입니다. 색인하는 문서 버전도 다르고, 검색 방식도 다릅니다([포함된 위키](https://github.com/covagashi/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027)에 SQLite FTS5/bm25 키워드 검색 적용, 2026은 Vectorize + bge 의미 검색). 실제 질의 비교에서는 정확한 이름이나 시그니처를 찾을 때 FTS5가 강하고, 질의와 문서에 공통 어휘가 전혀 없을 때 의미 검색이 강했습니다. 둘 다 설치하는 것이 좋습니다.
+`eplan-wiki-2027`은 `eplan-rag`의 2026 → 2027 업그레이드가 아니라 별도 서버입니다. 색인하는 문서 버전도 다르고, 검색 방식도 다릅니다([포함된 위키](https://github.com/Canary-ECAD/eplan-cloudflare-rags/tree/main/cloudflare-rag-eplan-2027)에 SQLite FTS5/bm25 키워드 검색 적용, 2026은 Vectorize + bge 의미 검색). 실제 질의 비교에서는 정확한 이름이나 시그니처를 찾을 때 FTS5가 강하고, 질의와 문서에 공통 어휘가 전혀 없을 때 의미 검색이 강했습니다. 둘 다 설치하는 것이 좋습니다.
 
 개발 중 EPLAN 작업 이름과 매개변수를 확인할 때 REST API도 사용할 수 있습니다.
 
@@ -107,27 +107,22 @@ curl -X POST https://rag2027.covaga.xyz/search -H "Content-Type: application/jso
      -d '{"query": "FindAction", "topK": 3}'
 ```
 
-도구, REST 엔드포인트 및 구조는 [P8 2026 RAG README](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md)와 [EEC Pro RAG README](https://github.com/covagashi/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md)를 참조하세요.
+도구, REST 엔드포인트 및 구조는 [P8 2026 RAG README](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eplan-p8/README.md)와 [EEC Pro RAG README](https://github.com/Canary-ECAD/eplan-cloudflare-rags/blob/main/cloudflare-rag-eecpro/README.md)를 참조하세요.
 
 ### EPLAN 개발용 Claude Code 스킬
 
-MCP 서버는 Claude가 EPLAN에서 *작업을 실행*하게 합니다. [**eplan-development**](https://github.com/covagashi/eplan-development-skill) 스킬은 Claude가 *올바른 EPLAN 코드를 작성*하도록 돕습니다. 스크립트 진입점, 검증된 작업 매개변수, 부품 데이터베이스 접근, Remote Client 자동화(동적 포트, 헤드리스 EPLAN, Cogineer), 그리고 의사 비동기 명령의 블로킹, 메시지 루프 감시 스레드, 리소스 해제 규칙, EPLAN 2025의 remoting 변경 사항 같은 운영상 주의점을 다룹니다.
+MCP 서버는 Claude가 EPLAN에서 *작업을 실행*하게 합니다. [**eplan-scripting**](https://github.com/Canary-ECAD/eplan-scripting-skill) 스킬은 Claude가 *올바른 EPLAN 코드를 작성*하도록 돕습니다. 스크립트 진입점, 검증된 작업 매개변수, 부품 데이터베이스 접근, Remote Client 자동화(동적 포트, 헤드리스 EPLAN, Cogineer), 그리고 의사 비동기 명령의 블로킹, 메시지 루프 감시 스레드, 리소스 해제 규칙, EPLAN 2025의 remoting 변경 사항 같은 운영상 주의점을 다룹니다.
 
 이 스킬은 자체 저장소에 있으며 특정 **호스트에 종속되지 않습니다**. MCP 서버, 스크립트 실행기 또는 문서 색인을 전제로 하지 않으므로 단독으로도 유용합니다.
 
 ```text
-/plugin marketplace add covagashi/eplan-development-skill
-/plugin install eplan-development@eplan-skills
+/plugin marketplace add Canary-ECAD/eplan-mcp
+/plugin install eplan@eplan-tools            # router + all skills + doc RAGs
+/plugin install eplan-scripting@eplan-tools  # Electric P8 only
+/plugin install eec-pro@eplan-tools          # EEC Pro only
 ```
 
-이 저장소도 같은 스킬을 가리키는 플러그인 마켓플레이스입니다.
-
-```text
-/plugin marketplace add covagashi/eplan-rag-mcp
-/plugin install eplan-development@eplan-tools
-```
-
-수동 설치 및 자세한 내용은 [스킬 README](https://github.com/covagashi/eplan-development-skill#readme)를 참조하세요.
+수동 설치 및 자세한 내용은 [스킬 README](https://github.com/Canary-ECAD/eplan-scripting-skill#readme)를 참조하세요.
 
 ## 새로운 EPLAN 작업 추가
 
@@ -168,7 +163,7 @@ Claude 또는 서버가 다시 시작되면 새 도구를 사용할 수 있습�
 python eplan-p8-mcp-server/tools/validate_actions.py
 ```
 
-![EPLAN 테스트](image-1.png)
+![EPLAN 테스트](assets/eplan-test.png)
 
 ### 팁
 
@@ -183,7 +178,7 @@ python eplan-p8-mcp-server/tools/validate_actions.py
 `EPLAN_MCP_EXTENSIONS` 환경 변수에 하나 이상의 디렉터리를 지정하세요(Windows에서는 `;`로 구분). 시작 시 최상위 `*.py` 파일 중 이름이 `_`로 시작하지 않는 파일을 가져와, 해당 파일의 `__all__` 함수를 내장 작업처럼 MCP 도구로 등록합니다.
 
 ```python
-# my_company_tools.py (eplan-rag-mcp가 아닌 비공개 저장소)
+# my_company_tools.py (eplan-mcp가 아닌 비공개 저장소)
 TOOL_PREFIX = "acme_"          # 선택 사항; 기본값 "eplan_"
 __all__ = ["run_smoke_test"]
 
@@ -223,7 +218,7 @@ def run_smoke_test(project_path: str) -> dict:
 
 | 저장소 | 설명 |
 |---|---|
-| [**eplan-development-skill**](https://github.com/covagashi/eplan-development-skill) | 독립적인 호스트 비종속 Claude Code 스킬. `/plugin marketplace add covagashi/eplan-development-skill`로 설치합니다. |
+| [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | 독립적인 호스트 비종속 Claude Code 스킬. `/plugin marketplace add Canary-ECAD/eplan-mcp`로 설치합니다. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | EPLAN 오른쪽 클릭 메뉴에 항목을 추가하고 클릭한 행을 읽는 도구와 예제입니다. |
 
 ## 참고 자료
@@ -234,4 +229,6 @@ def run_smoke_test(project_path: str) -> dict:
 
 ## 라이선스
 
-MIT — [`license`](license)를 참조하세요.
+MIT — [`LICENSE`](LICENSE)를 참조하세요.
+
+> **고지:** 이 프로젝트는 [Canary E-cad](https://github.com/Canary-ECAD)의 독립적인 커뮤니티 프로젝트이며 EPLAN GmbH & Co. KG와 제휴, 보증 또는 지원 관계가 없습니다. EPLAN, EPLAN Electric P8, EPLAN EEC Pro는 해당 소유자의 상표입니다.
