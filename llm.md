@@ -166,7 +166,8 @@ EPLAN's own UI and two wasted remote-API round-trips per call).
    specific one. If `eplan_servers` returns `[]` the connection usually still
    works — that empty list is a known limitation (especially right after EPLAN
    starts), not a failure: `eplan_connect` falls back to the TCP ports
-   EPLAN.exe actually listens on (via netstat), then the default 49152. To
+   EPLAN.exe actually listens on (read from Windows' TCP table, so it works in
+   any Windows language), then the default 49152. To
    reach EPLAN on another machine pass `host` (port required then).
 2. **Pick the project context.** Most actions take an optional `project_name`. If
    omitted, EPLAN uses the **currently selected/open** project. Use

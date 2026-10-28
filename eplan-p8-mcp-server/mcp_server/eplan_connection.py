@@ -201,25 +201,19 @@ LOGGED_RESULT_KEYS = tuple(n for n in RESULT_FIELD_NAMES if n not in _NOT_LOGGED
 
 
 def eplan_pids() -> list:
-    """PIDs of running EPLAN.exe processes (empty list on any error)."""
-    import subprocess
+    """PIDs of running EPLAN.exe processes (empty list on any error).
+
+    Read from the Windows API, not tasklist: see process_control for why.
+    """
     try:
-        out = subprocess.run(
-            ["tasklist", "/FI", f"IMAGENAME eq {EPLAN_EXE_NAME}", "/FO", "CSV", "/NH"],
-            capture_output=True, text=True, timeout=15,
-        ).stdout
-        pids = []
-        for line in out.splitlines():
-            parts = [p.strip('"') for p in line.strip().split('","')]
-            if len(parts) >= 2 and parts[0].lower() == EPLAN_EXE_NAME.lower():
-                pids.append(int(parts[1]))
-        return pids
+        from process_control import process_ids
+        return process_ids(EPLAN_EXE_NAME)
     except Exception:
         return []
 
 
 def eplan_listening_ports(only_pids=None, pids=None) -> list:
-    """TCP ports EPLAN.exe processes are LISTENING on (via netstat).
+    """TCP ports EPLAN.exe processes are listening on (Windows API, not netstat).
 
     Fallback discovery: GetActiveEplanServersOnLocalMachine is unreliable
     right after EPLAN (re)starts - it can return empty while the remoting
@@ -234,9 +228,8 @@ def eplan_listening_ports(only_pids=None, pids=None) -> list:
             the instance it just started apart from one that was already
             running - see Audit #42 item 12.
         pids: Already-computed result of eplan_pids(). If given, skips the
-            internal tasklist spawn.
+            internal process snapshot.
     """
-    import subprocess
     pids = set(eplan_pids() if pids is None else pids)
     if not pids:
         return []
@@ -246,16 +239,10 @@ def eplan_listening_ports(only_pids=None, pids=None) -> list:
             return []
     ports = []
     try:
-        out = subprocess.run(["netstat", "-ano", "-p", "TCP"],
-                             capture_output=True, text=True, timeout=30).stdout
-        for line in out.splitlines():
-            parts = line.split()
-            # TCP  0.0.0.0:49153  0.0.0.0:0  LISTENING  45472
-            if (len(parts) >= 5 and parts[0] == "TCP" and parts[3] == "LISTENING"
-                    and parts[4].isdigit() and int(parts[4]) in pids):
-                port = parts[1].rsplit(":", 1)[-1]
-                if port.isdigit() and port not in ports:
-                    ports.append(port)
+        from process_control import tcp_listeners
+        for _address, port, pid in tcp_listeners():
+            if pid in pids and str(port) not in ports:
+                ports.append(str(port))
     except Exception:
         pass
     return ports
@@ -449,7 +436,7 @@ class EPLANConnectionManager:
             # Auto-detect port(s) if not specified. Server enumeration first;
             # if it comes back empty (it is unreliable right after EPLAN
             # starts), fall back to EPLAN.exe's actual listening ports from
-            # netstat, then the historical default as a last resort. Each
+            # Windows' TCP table, then the historical default as a last resort. Each
             # candidate is tried until one answers a Ping.
             if port:
                 candidates = [str(port)]

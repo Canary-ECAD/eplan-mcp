@@ -1,5 +1,7 @@
 """Windows process ownership/handle tests; never opens or terminates a real process."""
 import ctypes
+import os
+import socket
 from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
@@ -7,14 +9,14 @@ import process_control as control
 
 
 @pytest.mark.parametrize("listeners,expected", [
-    ("TCP 0.0.0.0:49152 0.0.0.0:0 LISTENING 123", 123),
-    ("TCP [::]:49152 [::]:0 LISTENING 123\nTCP 0.0.0.0:49152 0.0.0.0:0 LISTENING 123", 123),
-    ("TCP 0.0.0.0:49153 0.0.0.0:0 LISTENING 123", None),
-    ("TCP 0.0.0.0:49152 0.0.0.0:0 ESTABLISHED 123", None),
-    ("TCP 127.0.0.1:49152 0.0.0.0:0 LISTENING 123\nTCP [::1]:49152 [::]:0 LISTENING 456", None),
+    ([("0.0.0.0", 49152, 123)], 123),
+    ([("::", 49152, 123), ("0.0.0.0", 49152, 123)], 123),
+    ([("0.0.0.0", 49153, 123)], None),
+    ([], None),
+    ([("127.0.0.1", 49152, 123), ("::1", 49152, 456)], None),
 ])
 def test_listener_requires_unique_owner(monkeypatch, listeners, expected):
-    monkeypatch.setattr(control.subprocess, "run", Mock(return_value=SimpleNamespace(stdout=listeners)))
+    monkeypatch.setattr(control, "tcp_listeners", Mock(return_value=listeners))
     if expected is None:
         with pytest.raises(RuntimeError):
             control._listener_pid("49152")
@@ -23,9 +25,49 @@ def test_listener_requires_unique_owner(monkeypatch, listeners, expected):
 
 
 def test_listener_query_failure_is_not_empty_success(monkeypatch):
-    monkeypatch.setattr(control.subprocess, "run", Mock(side_effect=OSError("query failed")))
+    monkeypatch.setattr(control, "tcp_listeners", Mock(side_effect=OSError("query failed")))
     with pytest.raises(OSError):
         control._listener_pid(49152)
+
+
+def _row4(state, local, port, pid):
+    return (state.to_bytes(4, "little") + socket.inet_aton(local) + port.to_bytes(2, "big")
+            + b"\0\0" + socket.inet_aton("0.0.0.0") + b"\0" * 4 + pid.to_bytes(4, "little"))
+
+
+def _row6(local, port, pid):
+    return (socket.inet_pton(socket.AF_INET6, local) + b"\0" * 4 + port.to_bytes(2, "big")
+            + b"\0\0" + b"\0" * 16 + b"\0" * 8 + (2).to_bytes(4, "little") + pid.to_bytes(4, "little"))
+
+
+def test_parse_tcp_table_ipv4_rows():
+    raw = (2).to_bytes(4, "little") + _row4(2, "0.0.0.0", 49152, 45472) + _row4(2, "127.0.0.1", 135, 7)
+    assert control.parse_tcp_table(raw, control._AF_INET) == [
+        ("0.0.0.0", 49152, 45472), ("127.0.0.1", 135, 7)]
+
+
+def test_parse_tcp_table_ipv6_rows():
+    raw = (1).to_bytes(4, "little") + _row6("::1", 49153, 45472)
+    assert control.parse_tcp_table(raw, control._AF_INET6) == [("::1", 49153, 45472)]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="reads the real Windows TCP table")
+@pytest.mark.parametrize("family,host", [(socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")])
+def test_tcp_listeners_sees_a_real_listening_socket(family, host):
+    with socket.socket(family, socket.SOCK_STREAM) as server:
+        server.bind((host, 0))
+        server.listen()
+        port = server.getsockname()[1]
+        assert (host, port, os.getpid()) in control.tcp_listeners()
+    assert not any(p == port and pid == os.getpid() for _a, p, pid in control.tcp_listeners())
+
+
+@pytest.mark.skipif(os.name != "nt", reason="reads the real Windows process list")
+def test_process_ids_finds_this_python():
+    import sys
+    name = os.path.basename(sys.executable)
+    assert os.getpid() in control.process_ids(name.upper())
+    assert control.process_ids("no-such-program-here.exe") == []
 
 
 def test_remote_target_never_looks_at_local_processes(monkeypatch):
