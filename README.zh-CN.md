@@ -182,7 +182,7 @@ dispose 规范、EPLAN 2025 的远程访问变更。
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # 路由器 + 全部 Skill + 文档 RAG
+/plugin install eplan@eplan-tools            # 路由器 + P8 Skill + P8 文档 RAG
 /plugin install eplan-scripting@eplan-tools  # 仅 Electric P8
 /plugin install eec-pro@eplan-tools          # 仅 EEC Pro
 ```

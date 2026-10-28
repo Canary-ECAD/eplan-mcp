@@ -202,7 +202,7 @@ así que es útil por sí sola, uses o no lo demás de aquí.
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # router + todas las skills + RAGs de docs
+/plugin install eplan@eplan-tools            # router + skill de P8 + RAGs de docs de P8
 /plugin install eplan-scripting@eplan-tools  # solo Electric P8
 /plugin install eec-pro@eplan-tools          # solo EEC Pro
 ```

@@ -198,7 +198,7 @@ ist daher auch allein nützlich, egal ob du sonst etwas von hier verwendest.
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # Router + alle Skills + Doku-RAGs
+/plugin install eplan@eplan-tools            # Router + P8-Skill + P8-Doku-RAGs
 /plugin install eplan-scripting@eplan-tools  # nur Electric P8
 /plugin install eec-pro@eplan-tools          # nur EEC Pro
 ```

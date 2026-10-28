@@ -199,7 +199,7 @@ MCP-серверы позволяют Claude *действовать* в EPLAN. 
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # роутер + все навыки + RAG документации
+/plugin install eplan@eplan-tools            # роутер + навык P8 + RAG документации P8
 /plugin install eplan-scripting@eplan-tools  # только Electric P8
 /plugin install eec-pro@eplan-tools          # только EEC Pro
 ```

@@ -200,7 +200,7 @@ kullansanız da kullanmasanız da tek başına işe yarar.
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # yönlendirici + tüm beceriler + belge RAG'leri
+/plugin install eplan@eplan-tools            # yönlendirici + P8 becerisi + P8 belge RAG'leri
 /plugin install eplan-scripting@eplan-tools  # yalnızca Electric P8
 /plugin install eec-pro@eplan-tools          # yalnızca EEC Pro
 ```

@@ -198,7 +198,7 @@ się sama, niezależnie od tego, czy używasz czegoś innego stąd.
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # router + wszystkie umiejętności + RAG z dokumentacją
+/plugin install eplan@eplan-tools            # router + umiejętność P8 + RAG z dokumentacją P8
 /plugin install eplan-scripting@eplan-tools  # tylko Electric P8
 /plugin install eec-pro@eplan-tools          # tylko EEC Pro
 ```

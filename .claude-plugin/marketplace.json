@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "The Canary E-cad plugin marketplace for EPLAN Electric P8 and EEC Pro: agent skills for scripting, the EPLAN API and Remote Client, plus the documentation RAG MCP servers.",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "plugins": [
     {
@@ -15,21 +15,20 @@
         "source": "github",
         "repo": "Canary-ECAD/eplan-scripting-skill"
       },
-      "description": "Everything: the router plus all EPLAN skills (Electric P8 scripting, API and Remote Client; EEC Pro typicals, formulas and generation) and the three documentation RAG MCP servers.",
-      "version": "2.0.0",
+      "description": "EPLAN Electric P8: the router plus the P8 skill (scripting, API and Remote Client) and the two P8 documentation RAG MCP servers. EEC Pro is a separate plugin: install eec-pro as well.",
+      "version": "2.1.0",
       "author": {
         "name": "Canary E-cad",
         "url": "https://github.com/Canary-ECAD"
       },
       "homepage": "https://covaga.dev",
       "license": "MIT",
-      "keywords": ["eplan", "eplan-p8", "eplan-electric-p8", "eec-pro", "electrical-engineering", "csharp", "automation"],
+      "keywords": ["eplan", "eplan-p8", "eplan-electric-p8", "electrical-engineering", "csharp", "automation"],
       "category": "development",
       "strict": false,
       "skills": [
         "./router",
-        "./skills/eplan-p8/eplan-scripting",
-        "./skills/eec-pro/eec-pro-development"
+        "./skills/eplan-p8/eplan-scripting"
       ]
     },
     {
@@ -39,7 +38,7 @@
         "repo": "Canary-ECAD/eplan-scripting-skill"
       },
       "description": "EPLAN Electric P8 only: C# scripting, the EPLAN API (parts database, 3D), Remote Client automation, verified action parameters and production pitfalls. Covers EPLAN 2022-2027.",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "author": {
         "name": "Canary E-cad",
         "url": "https://github.com/Canary-ECAD"
@@ -55,20 +54,20 @@
       "name": "eec-pro",
       "source": {
         "source": "github",
-        "repo": "Canary-ECAD/eplan-scripting-skill"
+        "repo": "Canary-ECAD/eec-pro-skill"
       },
-      "description": "EPLAN EEC Pro 2026 only: typicals and the mechatronic model, the formula language, configuration interfaces, scripting, and generation into P8 / Pro Panel / PLC / text targets.",
-      "version": "2.0.0",
+      "description": "EPLAN EEC Pro 2026: typicals and the mechatronic model, the formula language, configuration interfaces, Groovy actions and P8 post-generation scripts, the EOX model file, the Job Server (recipes, triggers, workers, REST, timing), and generation into P8 / Pro Panel / PLC / text targets. Includes the EEC Pro documentation RAG MCP server.",
+      "version": "2.1.0",
       "author": {
         "name": "Canary E-cad",
         "url": "https://github.com/Canary-ECAD"
       },
       "homepage": "https://covaga.dev",
       "license": "MIT",
-      "keywords": ["eplan", "eec-pro", "typicals", "electrical-engineering", "automation"],
+      "keywords": ["eplan", "eec-pro", "typicals", "job-server", "eox", "electrical-engineering", "automation"],
       "category": "development",
       "strict": false,
-      "skills": ["./skills/eec-pro/eec-pro-development"]
+      "skills": ["./skills/eec-pro-development"]
     }
   ]
 }

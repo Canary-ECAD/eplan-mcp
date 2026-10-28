@@ -192,7 +192,7 @@ MCP 서버는 Claude가 EPLAN에서 *행동*하게 합니다.
 
 ```
 /plugin marketplace add Canary-ECAD/eplan-mcp
-/plugin install eplan@eplan-tools            # 라우터 + 모든 스킬 + 문서 RAG
+/plugin install eplan@eplan-tools            # 라우터 + P8 스킬 + P8 문서 RAG
 /plugin install eplan-scripting@eplan-tools  # Electric P8만
 /plugin install eec-pro@eplan-tools          # EEC Pro만
 ```
