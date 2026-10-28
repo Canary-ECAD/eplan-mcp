@@ -12,7 +12,7 @@ Two registration modes, selected with EPLAN_MCP_MODE:
 
 Requirements:
 - EPLAN installed
-- pip install pythonnet mcp
+- pip install pythonnet "mcp<2"
 """
 
 import json

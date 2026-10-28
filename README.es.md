@@ -44,7 +44,7 @@ mediante búsqueda.
 ### Automatización local de EPLAN (P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python TU_RUTA/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # debería aparecer "eplan"
 ```

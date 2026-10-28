@@ -43,7 +43,7 @@ EPLAN in Echtzeit *ausführen* und die Dokumentation per Suche befragen.
 ### Lokale EPLAN-Automatisierung (P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python DEIN_PFAD/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # sollte "eplan" anzeigen
 ```

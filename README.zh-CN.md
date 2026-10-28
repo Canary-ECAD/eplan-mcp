@@ -40,7 +40,7 @@
 ### 本地 EPLAN 自动化（P8）
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python 你的路径/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # 应列出 "eplan"
 ```

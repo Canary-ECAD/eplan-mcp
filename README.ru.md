@@ -43,7 +43,7 @@ EPLAN. Три удалённых RAG по документации находя�
 ### Локальная автоматизация EPLAN (P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python ВАШ_ПУТЬ/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # в списке должен быть "eplan"
 ```
