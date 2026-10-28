@@ -42,7 +42,7 @@ EPLAN içinde gerçek zamanlı olarak işlem *yürütebilir* ve belgelere arama 
 ### Yerel EPLAN otomasyonu (P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python YOLUNUZ/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # "eplan" listelenmeli
 ```

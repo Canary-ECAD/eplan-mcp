@@ -1,7 +1,8 @@
 # EPLAN MCP Server Dependencies
 
-# MCP SDK (>=1.8.0 for the streamable-http transport used by MCP_TRANSPORT=http)
-mcp>=1.8.0
+# MCP SDK (>=1.8.0 for the streamable-http transport used by MCP_TRANSPORT=http;
+# <2 because mcp 2.x removed mcp.server.fastmcp, which server.py imports)
+mcp>=1.8.0,<2
 
 # .NET interop for EPLAN API
 pythonnet>=3.0.0

@@ -43,7 +43,7 @@ AI 지원 자동화입니다.
 ### 로컬 EPLAN 자동화(P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python 사용자경로/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # "eplan"이 보여야 합니다
 ```

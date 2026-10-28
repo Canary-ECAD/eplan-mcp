@@ -43,7 +43,7 @@ inside EPLAN in real time and consult the documentation through search.
 ### Local EPLAN automation (P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python YOURPATH/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # should list "eplan"
 ```

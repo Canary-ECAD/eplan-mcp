@@ -43,7 +43,7 @@ zewnętrznymi narzędziami i usługami. Zamiast tylko generować kod, Claude mo�
 ### Lokalna automatyzacja EPLAN (P8)
 
 ```bash
-pip install pythonnet mcp
+pip install pythonnet "mcp<2"
 claude mcp add eplan -- python TWOJA_SCIEZKA/eplan-p8-mcp-server/mcp_server/server.py
 claude mcp list   # powinien pojawić się "eplan"
 ```
