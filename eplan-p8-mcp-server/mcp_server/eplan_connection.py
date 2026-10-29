@@ -357,6 +357,12 @@ class EPLANConnectionManager:
             import System.Reflection
             import System
 
+            # The Remote Client writes chatter ("Server response: Hello ...")
+            # through .NET Console.Out, i.e. the process stdout that the MCP
+            # stdio transport owns; every such line is a corrupt JSON-RPC
+            # message to the client. Send .NET console output to stderr.
+            System.Console.SetOut(System.Console.Error)
+
             def _resolve_from_eplan(sender, args):
                 asm_name = System.Reflection.AssemblyName(args.Name).Name
                 candidate = os.path.join(eplan_path, asm_name + ".dll")
