@@ -263,8 +263,50 @@ def test_overlaps_report_crossing_but_not_containment():
     line = _pl("L", 0, 0, 1000, 1000, t="PolyLine")
     found = ops._overlaps([plate, a, b, c, line])
     assert len(found) == 1
+    assert found[0]["kind"] == "outline/outline"
     assert {found[0]["a"]["name"], found[0]["b"]["name"]} == {"-K1", "-K2"}
     assert found[0]["area_mm2"] == 500.0
+
+
+def test_overlaps_see_texts_and_autoconnect_lines():
+    rail = _pl("-DIN1", 170, 513, 410, 548)
+    rail["texts"] = [[282, 520, 297, 527]]              # caption in the rail's middle
+    psu = _pl("-G1", 245, 471, 343, 600)                # sits on the rail
+    x1 = _pl("-X1:1", 365, 271, 370, 320, t="Terminal")
+    x1["texts"] = [[360, 300, 380, 306]]
+    x2 = _pl("-X1:2", 370, 271, 375, 320, t="Terminal")
+    x2["texts"] = [[365, 300, 385, 306]]                # on top of -X1:1's caption
+    dim = _pl("dim", 398, 400, 398.1, 450, t="DimensionItem")
+    dim["texts"] = [[366, 295, 372, 310]]               # dimension text over -X1:1
+    plate = _pl("-M1", 0, 0, 500, 700)
+    plate_cap = _pl("-Canal1", 130, 115, 170, 650)
+    plate_cap["texts"] = [[135, 300, 165, 320]]         # a duct's caption, on the plate: normal
+    # A coil above a 0V rail: pins face each other, the line runs through -S9.
+    coil = _pl("-K1", 76, 96, 84, 104)
+    coil["pins"] = [{"direction": "Down", "point": {"x": 80, "y": 96}}]
+    node = _pl("T", 79, 59, 81, 61, t="SymbolReference")
+    node["pins"] = [{"direction": "Up", "point": {"x": 80, "y": 60}}]
+    s9 = _pl("-S9", 75, 70, 85, 90)
+    # A PLC point inside its box: its designation and its line are not collisions with the box.
+    box = _pl("-A1", 60, 104, 380, 180, t="PLC")
+    pt = _pl("-A1:DI a.0", 78, 170, 82, 176, t="Terminal")
+    pt["texts"] = [[70, 160, 90, 168]]
+    pt["pins"] = [{"direction": "Up", "point": {"x": 80, "y": 176}}]
+    x1t = _pl("-X1:9", 79, 190, 81, 192, t="Terminal")
+    x1t["pins"] = [{"direction": "Down", "point": {"x": 80, "y": 190}}]
+    kinds = {}
+    for f in ops._overlaps([rail, psu, x1, x2, dim, plate, plate_cap, coil, node, s9, box, pt, x1t]):
+        kinds.setdefault(f["kind"], []).append((f["a"]["name"], f["b"]["name"]))
+    assert ("-DIN1", "-G1") in kinds["text/outline"]          # rail caption over the PSU
+    assert ("-X1:1", "-X1:2") in kinds["text/text"]            # terminal captions, once per pair
+    assert kinds["text/text"].count(("-X1:1", "-X1:2")) == 1
+    assert ("dim", "-X1:1") in kinds["text/outline"]           # dimension text over a terminal
+    assert [p for p in kinds["line/outline"] if p[1] == "-S9" and p[0] in ("-K1", "T")]  # 0V line through -S9
+    assert "outline/outline" in kinds                          # the rail still crosses the PSU
+    flat = [pair for pairs in kinds.values() for pair in pairs]
+    assert not any("-M1" in pair for pair in flat)             # the plate contains everything
+    assert not any("-A1" in pair and "-A1:DI a.0" in pair for pair in flat)
+    assert not any(pair == ("-A1:DI a.0", "-A1") for pair in flat)
 
 
 # ---------------------------------------------------------------------------
