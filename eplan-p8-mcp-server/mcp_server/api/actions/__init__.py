@@ -205,6 +205,21 @@ from .partsmanagement import (
     partsmanagement_export_all,
 )
 
+# Target project + batched page operations
+from .target import live_set_target_project
+from .ops import (
+    live_batch,
+    live_find_placements,
+    live_place_device,
+    live_insert_macro,
+    live_place_panel_item,
+    live_place_plc_point,
+    live_place_terminal,
+    live_update_placement,
+    live_render_page,
+    live_check_page,
+)
+
 # PLC
 from .plc import (
     plc_export,
@@ -449,6 +464,11 @@ __all__ = [
     # Parts management API
     'partsmanagement_export', 'partsmanagement_import',
     'partsmanagement_export_by_properties', 'partsmanagement_export_all',
+    # Target project + batched page operations
+    'live_set_target_project',
+    'live_batch', 'live_find_placements', 'live_place_device', 'live_insert_macro',
+    'live_place_panel_item', 'live_place_plc_point', 'live_place_terminal',
+    'live_update_placement', 'live_render_page', 'live_check_page',
     # PLC
     'plc_export', 'plc_import',
     # Workspace

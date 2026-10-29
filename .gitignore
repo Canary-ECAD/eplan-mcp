@@ -63,6 +63,8 @@ node_modules/
 # Generated EPLAN scripts and their result files (runtime artifacts)
 eplan-p8-mcp-server/mcp_server/scripts/generated/*.cs
 eplan-p8-mcp-server/mcp_server/scripts/results/*.json
+eplan-p8-mcp-server/mcp_server/scripts/results/*.started
+eplan-p8-mcp-server/mcp_server/scripts/ops/
 
 # Local investigation notes: these hold live measurements from a real
 # workstation (customer project paths, usernames, private add-in names) and

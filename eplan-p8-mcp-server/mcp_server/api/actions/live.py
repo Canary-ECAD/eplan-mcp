@@ -59,6 +59,7 @@ import uuid
 
 from ._base import cs_escape
 from .scripted import _execute_script
+from . import target
 
 # EPLAN's dialogs join a function's connection point designations with this
 # separator ("Y09¶Y10"); the API stores one designation per index, so it is
@@ -526,13 +527,16 @@ _HELPERS = '''
             lsType = FindType("Eplan.EplApi.DataModel.LockingStep");
             lockStep = Activator.CreateInstance(lsType);
 
-            // Current project without ProjectManager.
-            Type ssType = FindType("Eplan.EplApi.HEServices.SelectionSet");
-            object ss = Activator.CreateInstance(ssType);
-            MethodInfo getCur = ssType.GetMethod("GetCurrentProject", new Type[] { typeof(bool) });
-            object project = getCur.Invoke(ss, new object[] { false });
-            if (project == null)
-                throw new Exception("No project is currently open/selected in EPLAN.");
+            // The target project (live_set_target_project), or the current one.
+            object project = ResolveProject("{{TARGET_PROJECT}}");
+            // A project that is not the GUI's current one is not write-locked
+            // by the LockingStep alone (Function.Create on one of its pages
+            // throws LockingException); LockObject takes the lock explicitly.
+            if ("{{TARGET_PROJECT}}".Length > 0)
+            {
+                MethodInfo lockObj = MethodByShape(project.GetType(), "LockObject", new string[] { }, false);
+                if (lockObj != null) { try { lockObj.Invoke(project, null); } catch { } }
+            }
 
             results["project"] = PropText(project, "ProjectName");
 
@@ -567,6 +571,56 @@ _FOOTER = '''
 # without this module having to know about them.
 _START_MARKER = "    [Start]\n"
 
+# Spliced in by _script() (and by ops.py) rather than kept in _HELPERS: the
+# metadata-only scripts in introspect.py reuse the static block above and must
+# stay free of any project lookup.
+_PROJECT_HELPER = '''
+    // Which project a script works on. An empty `wanted` keeps the historical
+    // behaviour: SelectionSet.GetCurrentProject, i.e. whatever the user last
+    // clicked in the GUI. A path (or project name) selects that project from
+    // ProjectManager.OpenProjects instead, so the user switching projects in
+    // EPLAN mid-session cannot redirect a write. Set through
+    // live_set_target_project; see target.py.
+    static object ResolveProject(string wanted)
+    {
+        if (string.IsNullOrEmpty(wanted))
+        {
+            Type ssType = FindType("Eplan.EplApi.HEServices.SelectionSet");
+            object ss = Activator.CreateInstance(ssType);
+            MethodInfo getCur = ssType.GetMethod("GetCurrentProject", new Type[] { typeof(bool) });
+            object project = getCur.Invoke(ss, new object[] { false });
+            if (project == null)
+                throw new Exception("No project is currently open/selected in EPLAN.");
+            return project;
+        }
+        string want = wanted.Replace("/", "\\\\").Trim().ToUpperInvariant();
+        Type pmType = FindType("Eplan.EplApi.DataModel.ProjectManager");
+        object pm = Activator.CreateInstance(pmType);
+        List<string> open = new List<string>();
+        try
+        {
+            object projects = RequireReadable(pmType, "OpenProjects").GetValue(pm, null);
+            foreach (object p in (IEnumerable)projects)
+            {
+                if (p == null) continue;
+                string link = PropText(p, "ProjectLinkFilePath") ?? "";
+                string name = PropText(p, "ProjectName") ?? "";
+                string norm = link.Replace("/", "\\\\").Trim().ToUpperInvariant();
+                if (norm == want || name.ToUpperInvariant() == want) return p;
+                open.Add(link.Length > 0 ? link : name);
+            }
+        }
+        finally
+        {
+            try { MethodInfo d = pmType.GetMethod("Dispose", Type.EmptyTypes); if (d != null) d.Invoke(pm, null); }
+            catch { }
+        }
+        throw new Exception("Target project is not open in EPLAN: '" + wanted + "'. Open projects: " +
+            (open.Count == 0 ? "(none)" : string.Join(" | ", open.ToArray())) +
+            ". Open it with eplan_open_project, or change the target with live_set_target_project.");
+    }
+'''
+
 
 def _script(class_name, body, extra_helpers=""):
     """
@@ -600,6 +654,10 @@ def _script(class_name, body, extra_helpers=""):
         helpers = helpers.replace(
             _START_MARKER, extra_helpers.rstrip() + "\n\n" + _START_MARKER, 1
         )
+    helpers = helpers.replace(
+        _START_MARKER, _PROJECT_HELPER.strip("\n") + "\n\n" + _START_MARKER, 1
+    )
+    helpers = helpers.replace("{{TARGET_PROJECT}}", cs_escape(target.get()))
     return _HEADER + class_name + helpers + body + _FOOTER
 
 

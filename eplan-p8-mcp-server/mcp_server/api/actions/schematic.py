@@ -204,7 +204,20 @@ _HELPERS_SCHEMATIC = r'''
         {
             if (p == null) continue;
             string n = PropText(p, "Name");
-            if (n == wanted) return p;
+            if (n == wanted)
+            {
+                // A page of a project that is not the GUI's current one is
+                // not write-locked by the LockingStep alone: Function.Create
+                // on it throws LockingException. When a target project is
+                // pinned, take the lock explicitly (a no-op if already held;
+                // harmless for a read, the step ends without changes).
+                if ("{{TARGET_PROJECT}}".Length > 0)
+                {
+                    MethodInfo lockObj = MethodByShape(p.GetType(), "LockObject", new string[] { }, false);
+                    if (lockObj != null) { try { lockObj.Invoke(p, null); } catch { } }
+                }
+                return p;
+            }
             if (names.Count < 30 && n != null) names.Add(n);
         }
         throw new Exception("No page named '" + wanted + "' in this project. " +
@@ -374,7 +387,18 @@ _HELPERS_SCHEMATIC = r'''
         {
             if (pl == null) continue;
             string h = Handle(pl);
-            if (h == handle) return pl;
+            if (h == handle)
+            {
+                // Same as FindPage: an object of a pinned, non-current project
+                // needs its write lock taken explicitly before Remove or a
+                // property write (Placement.Remove throws LockingException).
+                if ("{{TARGET_PROJECT}}".Length > 0)
+                {
+                    MethodInfo lockObj = MethodByShape(pl.GetType(), "LockObject", new string[] { }, false);
+                    if (lockObj != null) { try { lockObj.Invoke(pl, null); } catch { } }
+                }
+                return pl;
+            }
             if (present.Count < 20) present.Add(pl.GetType().Name + "=" + h);
         }
         throw new Exception("No placement with handle '" + handle + "' on page '" +
