@@ -197,6 +197,46 @@ _OPS_HELPERS = r'''
         catch (TargetInvocationException tie) { throw new Exception("LockObject: " + Flatten(tie.InnerException)); }
     }
 
+    // The boxes of a placement's displayed texts (device tag, part number,
+    // function text, connection designations...). PropertyPlacement
+    // bounding boxes are RELATIVE to the owner's Location (measured: a rail's
+    // caption at +112..127 of a rail placed at x=170 sits at x=282..297, the
+    // rail's middle). Unplaced properties report a zero box and are skipped.
+    static List<object> TextBoxes(object pl)
+    {
+        List<object> boxes = new List<object>();
+        object pps = TryRead(pl, "PropertyPlacements", null);
+        if (pps == null) return boxes;
+        double lx = 0, ly = 0;
+        object loc = TryRead(pl, "Location", null);
+        if (loc != null)
+        {
+            Dictionary<string, object> ld = PtDict(loc);
+            if (ld["x"] != null && ld["y"] != null) { lx = Convert.ToDouble(ld["x"]); ly = Convert.ToDouble(ld["y"]); }
+        }
+        foreach (object pp in (IEnumerable)pps)
+        {
+            if (pp == null) continue;
+            MethodInfo bb = MethodByShape(pp.GetType(), "GetBoundingBox", new string[] { }, false);
+            if (bb == null) continue;
+            try
+            {
+                double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue;
+                foreach (object p in (IEnumerable)bb.Invoke(pp, null))
+                {
+                    Dictionary<string, object> d = PtDict(p);
+                    if (d["x"] == null || d["y"] == null) continue;
+                    double x = Convert.ToDouble(d["x"]), y = Convert.ToDouble(d["y"]);
+                    x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y);
+                }
+                if (x1 - x0 < 1e-6 || y1 - y0 < 1e-6) continue;
+                boxes.Add(new double[] { lx + x0, ly + y0, lx + x1, ly + y1 });
+            }
+            catch { }
+        }
+        return boxes;
+    }
+
     static double[] BBoxOf(object pl)
     {
         Dictionary<string, object> d = DumpPlacement(pl, false);
@@ -740,7 +780,23 @@ _OPS_HELPERS = r'''
                     foreach (JToken t in (JArray)req["types"]) tl.Add((string)t);
                     types = tl.ToArray();
                 }
-                results["page_after"] = ReadPage(page, I(req, "limit", 1000), B(req, "pins", false), types);
+                Dictionary<string, object> after = ReadPage(page, I(req, "limit", 1000), B(req, "pins", false), types);
+                // Attach each placement's text boxes, for the overlap check.
+                Dictionary<string, Dictionary<string, object>> byHandle = new Dictionary<string, Dictionary<string, object>>();
+                foreach (object it in (List<object>)after["placements"])
+                {
+                    Dictionary<string, object> d = (Dictionary<string, object>)it;
+                    byHandle[(string)d["handle"]] = d;
+                }
+                foreach (object pl in PagePlacements(page))
+                {
+                    if (pl == null) continue;
+                    string h = Handle(pl);
+                    if (!byHandle.ContainsKey(h)) continue;
+                    List<object> tb = TextBoxes(pl);
+                    if (tb.Count > 0) byHandle[h]["texts"] = tb;
+                }
+                results["page_after"] = after;
             }
             results["success"] = true;
         }
@@ -865,7 +921,7 @@ def _run_registered(manager, request_path, result_path, timeout):
 
 
 def run_ops(page, ops, read_back=False, stop_on_error=True, allow_real_project=False,
-            write=True, pins=False, limit=1000, types=None, timeout_seconds=300.0):
+            write=True, pins=True, limit=1000, types=None, timeout_seconds=300.0):
     """Execute a list of ops on one page in ONE EPLAN script. Returns the shaped result.
 
     The read-back is limited to device types by default: a real page is mostly
@@ -939,8 +995,10 @@ def run_ops(page, ops, read_back=False, stop_on_error=True, allow_real_project=F
 # Overlap detection (Python side, from the read-back's bounding boxes)
 # ---------------------------------------------------------------------------
 
-_OVERLAP_TYPES = ("Function", "Terminal", "PLC", "BoxedDevice", "Group")
-_READBACK_TYPES = ("Function", "Terminal", "PLC", "BoxedDevice")
+_DEVICE_TYPES = ("Function", "Terminal", "PLC", "BoxedDevice")
+# What the read-back fetches for the overlap check: devices, the connection
+# symbols (their pins define where the autoconnect lines run) and dimensions.
+_READBACK_TYPES = _DEVICE_TYPES + ("SymbolReference", "DimensionItem")
 
 
 def _rect(pl):
@@ -955,34 +1013,168 @@ def _rect(pl):
     return r
 
 
-def _overlaps(placements, min_area=1.0):
-    """Pairs of device outlines that intersect without one containing the other."""
-    boxes = []
+def _who(pl):
+    return {"handle": pl.get("handle"), "name": pl.get("name"), "clrType": pl.get("clrType")}
+
+
+def _intersection(ra, rb):
+    ix = min(ra[2], rb[2]) - max(ra[0], rb[0])
+    iy = min(ra[3], rb[3]) - max(ra[1], rb[1])
+    return ix * iy if ix > 0 and iy > 0 else 0.0
+
+
+def _contains(outer, inner):
+    return inner[0] >= outer[0] and inner[1] >= outer[1] and inner[2] <= outer[2] and inner[3] <= outer[3]
+
+
+def _autoconnect_segments(placements):
+    """
+    The lines EPLAN draws by itself, reconstructed from the pins: two pins on
+    a shared axis, facing each other, with nothing of theirs in between. An
+    autoconnect line is not an object, so this is the only way to know where
+    one runs. Each segment is ((x0, y0, x1, y1), owner_a, owner_b).
+    """
+    pins = []
     for pl in placements:
-        if pl.get("clrType") not in _OVERLAP_TYPES:
-            continue
-        r = _rect(pl)
-        if r:
-            boxes.append((pl, r))
-    found = []
-    for i in range(len(boxes)):
-        a, ra = boxes[i]
-        for j in range(i + 1, len(boxes)):
-            b, rb = boxes[j]
-            ix = min(ra[2], rb[2]) - max(ra[0], rb[0])
-            iy = min(ra[3], rb[3]) - max(ra[1], rb[1])
-            if ix <= 0 or iy <= 0 or ix * iy < min_area:
+        for pin in pl.get("pins") or []:
+            pt = pin.get("point")
+            d = pin.get("direction")
+            if not pt or d not in ("Up", "Down", "Left", "Right"):
                 continue
-            a_in_b = ra[0] >= rb[0] and ra[1] >= rb[1] and ra[2] <= rb[2] and ra[3] <= rb[3]
-            b_in_a = rb[0] >= ra[0] and rb[1] >= ra[1] and rb[2] <= ra[2] and rb[3] <= ra[3]
-            if a_in_b or b_in_a:
-                continue  # a device on its plate, a point inside its box: normal
-            found.append({
-                "a": {"handle": a.get("handle"), "name": a.get("name"), "clrType": a.get("clrType")},
-                "b": {"handle": b.get("handle"), "name": b.get("name"), "clrType": b.get("clrType")},
-                "area_mm2": round(ix * iy, 2),
-            })
-    return found
+            pins.append((pt["x"], pt["y"], d, pl))
+    opposite = {"Up": "Down", "Down": "Up", "Left": "Right", "Right": "Left"}
+    segs = []
+    for x, y, d, owner in pins:
+        best = None
+        for x2, y2, d2, other in pins:
+            if other is owner or d2 != opposite[d]:
+                continue
+            if d in ("Up", "Down"):
+                if abs(x2 - x) > 0.01:
+                    continue
+                dist = (y2 - y) if d == "Up" else (y - y2)
+            else:
+                if abs(y2 - y) > 0.01:
+                    continue
+                dist = (x2 - x) if d == "Right" else (x - x2)
+            if dist <= 0.01:
+                continue
+            if best is None or dist < best[0]:
+                best = (dist, x2, y2, other)
+        if best and id(owner) < id(best[3]):
+            segs.append(((min(x, best[1]), min(y, best[2]), max(x, best[1]), max(y, best[2])), owner, best[3]))
+    return segs
+
+
+def _segment_crosses(seg, r, margin=0.01):
+    """True when the (axis-aligned) segment passes through the rectangle's interior."""
+    x0, y0, x1, y1 = seg
+    return (min(x1, r[2]) - max(x0, r[0]) > margin and min(y1, r[3]) - max(y0, r[1]) > margin) or (
+        x0 == x1 and r[0] + margin < x0 < r[2] - margin and min(y1, r[3]) - max(y0, r[1]) > margin) or (
+        y0 == y1 and r[1] + margin < y0 < r[3] - margin and min(x1, r[2]) - max(x0, r[0]) > margin)
+
+
+def _overlaps(placements, min_area=2.0, limit=100):
+    """
+    What collides on the page, from the read-back:
+
+    - outline/outline: two device outlines that intersect without one
+      containing the other (a device on its plate is normal);
+    - text/outline: a device's or dimension's text over another object's
+      outline (the caption of a rail across the PSU on it) - except the
+      object that contains the text's owner (a point's designation inside
+      its PLC box, a part's caption on the mounting plate);
+    - text/text: two objects' texts that overlap (terminal captions on top
+      of each other);
+    - line/outline and line/text: an autoconnect line, reconstructed from
+      facing pins, running through an object it does not end on or in.
+
+    One entry per pair, with the summed area and the number of collisions.
+    Not visible to this check: a coil's contact image, which the API does
+    not expose as geometry, and graphics inside macros.
+    """
+    outlines = []   # (pl, rect) for devices and dimensions
+    texts = []      # (pl, rect)
+    rect_of = {}
+    for pl in placements:
+        t = pl.get("clrType")
+        r = _rect(pl)
+        if r and t in _DEVICE_TYPES + ("DimensionItem",):
+            outlines.append((pl, r))
+            rect_of[id(pl)] = r
+        for box in pl.get("texts") or []:
+            if len(box) == 4 and box[2] - box[0] > 1e-6 and box[3] - box[1] > 1e-6:
+                texts.append((pl, tuple(box)))
+
+    found = {}
+
+    def report(kind, a, b, area=None, extra=None):
+        key = (kind, a.get("handle"), b.get("handle"))
+        if kind == "text/text":
+            key = (kind,) + tuple(sorted([a.get("handle") or "", b.get("handle") or ""]))
+        entry = found.get(key)
+        if entry is None:
+            entry = {"kind": kind, "a": _who(a), "b": _who(b), "area_mm2": 0.0, "count": 0}
+            if extra:
+                entry.update(extra)
+            found[key] = entry
+        entry["count"] += 1
+        if area:
+            entry["area_mm2"] = round(entry["area_mm2"] + area, 2)
+
+    def is_container(obj, owner):
+        """obj's outline holds the whole of owner: a plate, a PLC box, a rail."""
+        ro, rw = rect_of.get(id(obj)), rect_of.get(id(owner))
+        return ro is not None and rw is not None and _contains(ro, rw)
+
+    for i in range(len(outlines)):
+        a, ra = outlines[i]
+        if a.get("clrType") == "DimensionItem":
+            continue
+        for j in range(i + 1, len(outlines)):
+            b, rb = outlines[j]
+            if b.get("clrType") == "DimensionItem":
+                continue
+            area = _intersection(ra, rb)
+            if area < min_area or _contains(ra, rb) or _contains(rb, ra):
+                continue
+            report("outline/outline", a, b, area)
+
+    for tpl, tr in texts:
+        for opl, orect in outlines:
+            if opl is tpl or is_container(opl, tpl):
+                continue
+            area = _intersection(tr, orect)
+            if area >= min_area:
+                report("text/outline", tpl, opl, area)
+
+    for i in range(len(texts)):
+        a, ra = texts[i]
+        for j in range(i + 1, len(texts)):
+            b, rb = texts[j]
+            if a is b:
+                continue
+            area = _intersection(ra, rb)
+            if area >= min_area:
+                report("text/text", a, b, area)
+
+    for seg, owner_a, owner_b in _autoconnect_segments(placements):
+        ends = ((seg[0], seg[1]), (seg[2], seg[3]))
+        for opl, orect in outlines:
+            if opl is owner_a or opl is owner_b:
+                continue
+            if any(orect[0] <= x <= orect[2] and orect[1] <= y <= orect[3] for x, y in ends):
+                continue  # the line ends inside this object (a point in its PLC box)
+            if _segment_crosses(seg, orect):
+                report("line/outline", owner_a, opl, None, {"line_to": _who(owner_b), "segment": list(seg)})
+        for tpl, tr in texts:
+            if tpl is owner_a or tpl is owner_b:
+                continue
+            if _segment_crosses(seg, tr):
+                report("line/text", owner_a, tpl, None, {"line_to": _who(owner_b), "segment": list(seg)})
+
+    out = sorted(found.values(), key=lambda e: -e["area_mm2"])
+    return out[:limit]
 
 
 # ---------------------------------------------------------------------------
