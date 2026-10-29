@@ -71,6 +71,27 @@ It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   removing needs `confirm=True`, plus `allow_real_project=True` outside the
   scratch root for a project). Connected to an older EPLAN they return
   `errorType: EplanVersionUnsupported` at once, without running anything.
+  Includes `eplan_live_set_target_project` (pin every later call to one open
+  project by its .elk path - reflection scripts then pick it from
+  `ProjectManager.OpenProjects` and action wrappers fill an omitted
+  `PROJECTNAME` with it, so the user clicking another project in EPLAN cannot
+  redirect a write; set it right after opening the project) and 10 batched
+  page-operation tools built on ONE C# interpreter that runs a list of ops per
+  script and is registered as an EPLAN action for the session so later
+  batches skip the compile: `eplan_live_batch` (place / rect / macro / update /
+  move / remove / dimension / line / find / read, objects addressed by handle,
+  by device tag, or by `$label` of an earlier op), `eplan_live_find_placements`
+  (by tag - handles do not survive an EPLAN restart, tags do),
+  `eplan_live_place_device` (place + tag + part + properties + function
+  definition in one go; terminals and PLC points fall back to the 2-arg
+  Create automatically), `eplan_live_insert_macro` (a window macro by
+  insertion point or top-left corner, devices tagged), `eplan_live_place_panel_item`
+  (the part's 2D macro, or EPLAN's rectangle fallback), `eplan_live_place_plc_point`
+  (DI/DO/PS/CPS with the right FunctionDefinition), `eplan_live_place_terminal`,
+  `eplan_live_update_placement` (tag/part/properties on an existing object; a
+  duplicate tag is refused unless allowed), `eplan_live_render_page` (export
+  the page to PNG to look at it) and `eplan_live_check_page` (page check +
+  itemized messages + overlapping device outlines, in one call).
   Includes 5 discovery tools (`eplan_settings_list_children`,
   `eplan_list_schemes`, `eplan_list_report_templates`, `eplan_list_layers`,
   `eplan_list_enums`) that enumerate real EPLAN catalogs instead of guessing,

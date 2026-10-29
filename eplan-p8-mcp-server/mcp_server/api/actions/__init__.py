@@ -211,6 +211,21 @@ from .dataportal import (
     dataportal_search_count,
 )
 
+# Target project + batched page operations
+from .target import live_set_target_project
+from .ops import (
+    live_batch,
+    live_find_placements,
+    live_place_device,
+    live_insert_macro,
+    live_place_panel_item,
+    live_place_plc_point,
+    live_place_terminal,
+    live_update_placement,
+    live_render_page,
+    live_check_page,
+)
+
 # PLC
 from .plc import (
     plc_export,
@@ -471,6 +486,11 @@ __all__ = [
     'partsmanagement_export_by_properties', 'partsmanagement_export_all',
     # Data Portal
     'dataportal_add_to_download_list', 'dataportal_search_count',
+    # Target project + batched page operations
+    'live_set_target_project',
+    'live_batch', 'live_find_placements', 'live_place_device', 'live_insert_macro',
+    'live_place_panel_item', 'live_place_plc_point', 'live_place_terminal',
+    'live_update_placement', 'live_render_page', 'live_check_page',
     # PLC
     'plc_export', 'plc_import',
     # Workspace

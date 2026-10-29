@@ -114,6 +114,12 @@ def _build_action(action_name: str, **params) -> str:
     """
     parts = [action_name]
     for key, value in params.items():
+        # An omitted PROJECTNAME means "the current project" to EPLAN - the one
+        # the user last clicked. When a target project is pinned
+        # (live_set_target_project), send that instead.
+        if key == "PROJECTNAME" and (value is None or value == ""):
+            from . import target as _target
+            value = _target.get() or None
         # The KEY side needs the same protection as the value side. Values are
         # checked for a quote below, but the key was interpolated straight into
         # f"/{key}:{value}" - and Python's **kwargs accepts any string, including
