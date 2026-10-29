@@ -39,12 +39,17 @@ Use one of these whenever you are unsure of an exact action name or parameter �
 
 ## 2. The local `eplan` action server
 
-It exposes **217 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
+It exposes **219 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
 
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,
   `eplan_disconnect`, `eplan_list_extensions`.
-- **200 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
+- **202 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
+  Includes 2 Data Portal tools that use EPLAN's own Data Portal sign-in:
+  `eplan_dataportal_search_count` (read-only) and
+  `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
+  download is a dialog in EPLAN, so its result carries a `userAction` the model
+  must relay to the user before waiting on the import.
   Includes 5 discovery tools (`eplan_settings_list_children`,
   `eplan_list_schemes`, `eplan_list_report_templates`, `eplan_list_layers`,
   `eplan_list_enums`) that enumerate real EPLAN catalogs instead of guessing,

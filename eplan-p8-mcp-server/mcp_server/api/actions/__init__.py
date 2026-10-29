@@ -205,6 +205,12 @@ from .partsmanagement import (
     partsmanagement_export_all,
 )
 
+# Data Portal (integrated)
+from .dataportal import (
+    dataportal_add_to_download_list,
+    dataportal_search_count,
+)
+
 # PLC
 from .plc import (
     plc_export,
@@ -449,6 +455,8 @@ __all__ = [
     # Parts management API
     'partsmanagement_export', 'partsmanagement_import',
     'partsmanagement_export_by_properties', 'partsmanagement_export_all',
+    # Data Portal
+    'dataportal_add_to_download_list', 'dataportal_search_count',
     # PLC
     'plc_export', 'plc_import',
     # Workspace
