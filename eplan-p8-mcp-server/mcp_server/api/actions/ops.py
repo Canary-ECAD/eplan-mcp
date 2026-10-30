@@ -164,7 +164,18 @@ _OPS_HELPERS = r'''
                 throw new Exception("No earlier op in this batch is labelled '" + label + "'.");
             return ResolveOnPage(page, labels[label]);
         }
-        if (HANDLE_RE.IsMatch(r)) return ResolveOnPage(page, r);
+        if (HANDLE_RE.IsMatch(r))
+        {
+            // Groups (macro containers) are first-level placements that
+            // AllPlacements does not list; look there before giving up.
+            PropertyInfo fl = GetReadable(page.GetType(), "AllFirstLevelPlacements");
+            if (fl != null)
+            {
+                object v = fl.GetValue(page, null);
+                if (v != null) foreach (object pl in (IEnumerable)v) if (pl != null && Handle(pl) == r) return pl;
+            }
+            return ResolveOnPage(page, r);
+        }
 
         List<object> hits = new List<object>();
         foreach (object pl in PagePlacements(page))
@@ -192,6 +203,7 @@ _OPS_HELPERS = r'''
     {
         if (o == null) return;
         MethodInfo lo = MethodByShape(o.GetType(), "LockObject", new string[] { }, false);
+        if (lo == null) { try { lo = o.GetType().GetMethod("LockObject", Type.EmptyTypes); } catch { lo = null; } }
         if (lo == null) return;
         try { lo.Invoke(o, null); }
         catch (TargetInvocationException tie) { throw new Exception("LockObject: " + Flatten(tie.InnerException)); }
@@ -369,6 +381,7 @@ _OPS_HELPERS = r'''
 
     static void Finish(object project, object page, object fn, JObject a, Dictionary<string, object> r)
     {
+        Lock(fn);   // a fresh PotentialDefinition refuses property writes until locked
         if (Has(a, "functionDefinition")) SetFunctionDefinition(project, fn, (JObject)a["functionDefinition"], r);
         if (Has(a, "tag")) SetTag(page, fn, Req(a, "tag"), S(a, "visibleName", null), B(a, "allowMerge", false), r);
         if (Has(a, "part")) AddPart(fn, Req(a, "part"), r);
@@ -434,10 +447,15 @@ _OPS_HELPERS = r'''
             if (Flatten(ex).IndexOf("NotImplemented", StringComparison.OrdinalIgnoreCase) < 0) throw;
             // Terminals and PLC connection points: only the 2-arg Create is
             // implemented; the object then lands at the origin and is moved.
+            // The failed 4-arg call can leave a half-created object at the
+            // origin (measured: an unnamed Terminal at 0,0 per placement);
+            // remove it so it does not haunt the page.
+            try { if (PropText(fn, "IsValid") == "True") RemoveObject(fn); } catch { }
             variant = MakeVariant(project, lib, sym, v);
             fn = Activator.CreateInstance(funcType);
             MethodInfo create2 = RequireMethod(funcType, "Create", new string[] { "Page", "SymbolVariant" }, false);
             Call(create2, fn, new object[] { page, variant });
+            Lock(fn);   // a PotentialDefinition refuses the Location write until locked
             PropertyInfo locPi = RequireWritable(fn.GetType(), "Location");
             locPi.SetValue(fn, MakePoint(locPi.PropertyType, x, y), null);
             route = "Create(Page,SymbolVariant)+Location";
@@ -503,21 +521,25 @@ _OPS_HELPERS = r'''
     static void RemoveObject(object o)
     {
         if (o == null) return;
-        object subs = TryRead(o, "SubPlacements", null);
-        if (subs != null)
-        {
-            List<object> list = new List<object>();
-            foreach (object s in (IEnumerable)subs) if (s != null) list.Add(s);
-            foreach (object s in list) RemoveObject(s);
-        }
+        if (PropText(o, "IsValid") == "False") return;
+        // A locked Group removes itself with its contents (measured); only
+        // if that fails are the sub-placements removed one by one.
+        try { Lock(o); } catch { }
         try
         {
-            if (PropText(o, "IsValid") == "False") return;
             Call(RequireMethod(o.GetType(), "Remove", new string[] { }, false), o, new object[] { });
+            return;
         }
         catch (Exception e)
         {
-            if (Flatten(e).IndexOf("Invalid", StringComparison.OrdinalIgnoreCase) < 0) throw;
+            if (Flatten(e).IndexOf("Invalid", StringComparison.OrdinalIgnoreCase) >= 0) return;
+            object subs = TryRead(o, "SubPlacements", null);
+            if (subs == null) throw;
+            List<object> list = new List<object>();
+            foreach (object s in (IEnumerable)subs) if (s != null) list.Add(s);
+            foreach (object s in list) RemoveObject(s);
+            try { Lock(o); } catch { }
+            Call(RequireMethod(o.GetType(), "Remove", new string[] { }, false), o, new object[] { });
         }
     }
 
@@ -539,7 +561,18 @@ _OPS_HELPERS = r'''
             double dx = x - bb[0], dy = y - bb[3];
             if (Math.Abs(dx) > 1e-6 || Math.Abs(dy) > 1e-6)
             {
-                foreach (object o in objs) RemoveObject(o);
+                // Remove only the first-level objects of the trial copy: a
+                // group takes its contents with it, and removing a child whose
+                // parent is already gone throws a LockingException.
+                HashSet<string> top = new HashSet<string>();
+                PropertyInfo flp = GetReadable(page.GetType(), "AllFirstLevelPlacements");
+                if (flp != null)
+                {
+                    object flv = flp.GetValue(page, null);
+                    if (flv != null) foreach (object pl in (IEnumerable)flv) if (pl != null) top.Add(Handle(pl));
+                }
+                foreach (object o in objs)
+                    if (o != null && (top.Count == 0 || top.Contains(Handle(o)))) RemoveObject(o);
                 objs = InsertMacro(page, file, rep, v, x + dx, y + dy);
                 bb = BBoxOfAll(objs);
             }
