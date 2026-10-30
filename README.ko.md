@@ -14,6 +14,8 @@ AI 지원 자동화입니다.
 문서 RAG는 별도 저장소인
 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags)에 있습니다.
 
+> **개발자가 아니신가요?** [Bochica](https://github.com/Canary-ECAD/bochica)는 이 서버가 포함된 Windows 데스크톱 앱입니다. 설치하고 API 키를 붙여 넣은 뒤 평소 말로 EPLAN 작업을 하세요.
+
 > 이 저장소에서 LLM과 함께 작업하나요? [`llm.md`](llm.md)를 읽어 보세요. 이 툴킷이 할 수 있는
 > 일과 설정할 수 있는 모든 것을 LLM 관점에서 설명합니다.
 
@@ -312,6 +314,7 @@ def run_smoke_test(project_path: str) -> dict:
 
 | 저장소 | 설명 |
 |---|---|
+| [**bochica**](https://github.com/Canary-ECAD/bochica) | 이 서버와 스킬, 문서 RAG를 채팅 화면에 묶은 Windows 데스크톱 앱으로, 프로그래밍을 하지 않는 사람을 위한 것입니다. 어떤 AI 제공업체와도 작동합니다. |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | 위에서 설명한 Claude Code 스킬로, 독립적이며 호스트에 종속되지 않습니다. `/plugin marketplace add Canary-ECAD/eplan-mcp`로 설치합니다. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | EPLAN 오른쪽 클릭 메뉴에 항목을 추가하고 사용자가 클릭한 행을 읽습니다. 탐색 도구와 완성된 예제가 들어 있습니다. |
 

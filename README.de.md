@@ -14,6 +14,8 @@ Dieses Repository enthält den lokalen MCP-Server, der eine laufende EPLAN-Insta
 Die drei entfernten Dokumentations-RAGs liegen im separaten Repository
 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags).
 
+> **Kein Entwickler?** [Bochica](https://github.com/Canary-ECAD/bochica) ist eine Windows-Desktop-App, die diesen Server mitbringt: installieren, API-Schlüssel einfügen und in normaler Sprache mit EPLAN arbeiten.
+
 > Arbeitest du hier mit einem LLM? Lies [`llm.md`](llm.md) – dort steht, für ein LLM
 > formuliert, alles, was das Toolkit kann und was sich konfigurieren lässt.
 
@@ -326,6 +328,7 @@ Hinweise:
 
 | Repository | Was es ist |
 |---|---|
+| [**bochica**](https://github.com/Canary-ECAD/bochica) | Windows-Desktop-App, die diesen Server, die Skills und die Dokumentations-RAGs hinter einem Chat bündelt, für alle, die nicht programmieren. Funktioniert mit jedem KI-Anbieter. |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Der Claude-Code-Skill von oben, eigenständig und hostunabhängig. Installation mit `/plugin marketplace add Canary-ECAD/eplan-mcp`. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | Eigene Einträge in EPLANs Kontextmenüs hinzufügen und die vom Benutzer angeklickte Zeile lesen. Ein Erkundungswerkzeug plus ein ausgearbeitetes Beispiel. |
 

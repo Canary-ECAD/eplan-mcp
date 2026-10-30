@@ -14,6 +14,8 @@ To repozytorium zawiera lokalny serwer MCP, który steruje uruchomioną instancj
 RAG z dokumentacją znajdują się w osobnym repozytorium
 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags).
 
+> **Nie programujesz?** [Bochica](https://github.com/Canary-ECAD/bochica) to aplikacja desktopowa dla Windows z wbudowanym tym serwerem: zainstaluj ją, wklej klucz API i pracuj z EPLAN zwykłym językiem.
+
 > Pracujesz tu z LLM? Przeczytaj [`llm.md`](llm.md) — opisuje, językiem przeznaczonym dla LLM,
 > wszystko, co zestaw potrafi i co można w nim skonfigurować.
 
@@ -321,6 +323,7 @@ Uwagi:
 
 | Repozytorium | Co to jest |
 |---|---|
+| [**bochica**](https://github.com/Canary-ECAD/bochica) | Aplikacja desktopowa dla Windows, która łączy ten serwer, skille i RAG-i dokumentacji w jednym czacie, dla osób, które nie programują. Działa z każdym dostawcą AI. |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Opisana wyżej umiejętność Claude Code, samodzielna i niezależna od środowiska. Instalacja: `/plugin marketplace add Canary-ECAD/eplan-mcp`. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | Dodawanie własnych pozycji do menu kontekstowych EPLAN i odczyt wiersza klikniętego przez użytkownika. Narzędzie do eksploracji i kompletny przykład. |
 

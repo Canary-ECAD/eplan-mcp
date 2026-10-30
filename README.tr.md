@@ -13,6 +13,8 @@ için yapay zekâ destekli otomasyon.
 Bu depo, çalışan bir EPLAN örneğini yöneten yerel MCP sunucusunu içerir. Üç uzak belge RAG'i ayrı
 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags) deposunda bulunur.
 
+> **Geliştirici değil misiniz?** [Bochica](https://github.com/Canary-ECAD/bochica), bu sunucuyu içinde getiren bir Windows masaüstü uygulamasıdır: kurun, bir API anahtarı yapıştırın ve EPLAN ile günlük dilde çalışın.
+
 > Burada bir LLM ile mi çalışıyorsunuz? [`llm.md`](llm.md) dosyasını okuyun: araç setinin
 > yapabildiği ve yapılandırılabilen her şeyi LLM'e yönelik bir dille anlatır.
 
@@ -321,6 +323,7 @@ Notlar:
 
 | Depo | Nedir |
 |---|---|
+| [**bochica**](https://github.com/Canary-ECAD/bochica) | Bu sunucuyu, becerileri ve dokümantasyon RAG'lerini bir sohbet arayüzünde toplayan, programlama yapmayanlar için Windows masaüstü uygulaması. Her yapay zekâ sağlayıcısıyla çalışır. |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Yukarıdaki Claude Code becerisi; bağımsız ve ortamdan bağımsız. `/plugin marketplace add Canary-ECAD/eplan-mcp` ile kurun. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | EPLAN'ın sağ tık menülerine kendi girdilerinizi ekleyin ve kullanıcının tıkladığı satırı okuyun. Bir keşif aracı ve eksiksiz bir örnek. |
 

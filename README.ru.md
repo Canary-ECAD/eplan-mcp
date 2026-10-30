@@ -14,6 +14,8 @@ Context Protocol (MCP).
 EPLAN. Три удалённых RAG по документации находятся в отдельном репозитории
 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags).
 
+> **Не разработчик?** [Bochica](https://github.com/Canary-ECAD/bochica) — настольное приложение для Windows, в которое уже встроен этот сервер: установите его, вставьте API-ключ и работайте с EPLAN обычным языком.
+
 > Работаете здесь с LLM? Прочитайте [`llm.md`](llm.md) — там на языке, понятном LLM, описано
 > всё, что умеет и что позволяет настроить этот набор инструментов.
 
@@ -326,6 +328,7 @@ def run_smoke_test(project_path: str) -> dict:
 
 | Репозиторий | Что это |
 |---|---|
+| [**bochica**](https://github.com/Canary-ECAD/bochica) | Настольное приложение для Windows, которое объединяет этот сервер, навыки и RAG по документации в одном чате, для тех, кто не программирует. Работает с любым ИИ-провайдером. |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Навык Claude Code, описанный выше, — самостоятельный и не привязанный к окружению. Установка: `/plugin marketplace add Canary-ECAD/eplan-mcp`. |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | Добавление собственных пунктов в контекстные меню EPLAN и чтение строки, по которой щёлкнул пользователь. Инструмент исследования и готовый пример. |
 

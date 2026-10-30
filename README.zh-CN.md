@@ -12,6 +12,8 @@
 本仓库包含用于控制正在运行的 EPLAN 实例的本地 MCP 服务器。三个远程文档 RAG 位于独立仓库
 [eplan-cloudflare-rags](https://github.com/Canary-ECAD/eplan-cloudflare-rags)。
 
+> **不是开发者？** [Bochica](https://github.com/Canary-ECAD/bochica) 是一款内置本服务器的 Windows 桌面应用：安装后粘贴 API 密钥，即可用自然语言操作 EPLAN。
+
 > 正在用 LLM 处理这个仓库？请阅读 [`llm.md`](llm.md)——它以面向 LLM 的方式说明了本工具包能做
 > 和能配置的一切。
 
@@ -296,6 +298,7 @@ def run_smoke_test(project_path: str) -> dict:
 
 | 仓库 | 简介 |
 |---|---|
+| [**bochica**](https://github.com/Canary-ECAD/bochica) | 内置本服务器、技能和文档 RAG 的 Windows 桌面聊天应用，面向不写代码的用户。支持任意 AI 提供商。 |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | 上文介绍的 Claude Code Skill，独立且与宿主无关。用 `/plugin marketplace add Canary-ECAD/eplan-mcp` 安装。 |
 | [**eplan-ctxmenu-kit**](https://github.com/covagashi/eplan-ctxmenu-kit) | 向 EPLAN 的右键菜单添加自己的条目，并读取用户点击的那一行。包含一个探测工具和一个完整示例。 |
 
