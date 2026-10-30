@@ -249,6 +249,17 @@ _OPS_HELPERS = r'''
         return boxes;
     }
 
+    // A group moves only when every object inside it is locked too (an
+    // Image inside a macro group threw LockingException on Location).
+    static void LockDeep(object o)
+    {
+        if (o == null) return;
+        try { Lock(o); } catch { }
+        object subs = TryRead(o, "SubPlacements", null);
+        if (subs == null) return;
+        foreach (object s in (IEnumerable)subs) if (s != null) LockDeep(s);
+    }
+
     static double[] BBoxOf(object pl)
     {
         Dictionary<string, object> d = DumpPlacement(pl, false);
@@ -623,7 +634,7 @@ _OPS_HELPERS = r'''
     static void OpMove(object page, JObject a, Dictionary<string, string> labels, Dictionary<string, object> r)
     {
         object o = Resolve(page, Req(a, "ref"), labels);
-        Lock(o);
+        LockDeep(o);
         PropertyInfo locPi = RequireWritable(o.GetType(), "Location");
         locPi.SetValue(o, MakePoint(locPi.PropertyType, D(a, "x", 0), D(a, "y", 0)), null);
         r["handle"] = Handle(o);
