@@ -35,6 +35,7 @@ def _string_literals_balanced(cs: str) -> bool:
 ALL_TOOLS = [
     (live.live_query_functions, {}),
     (live.live_query_pages, {}),
+    (live.live_plc_io_list, {}),
     (live.live_set_function_text, {"name": "+X-K1", "text": "hi"}),
     (live.live_set_connection_designations,
      {"name": "+X-K1", "designations": ["Y11", "Y12"]}),
@@ -380,3 +381,215 @@ def test_read_check_messages_default_contains_is_empty_string(capture):
     # what an omitted `contains` actually compiles to, not the string "None".
     live.live_read_check_messages()
     assert 'string filterText = "";' in capture["script"]
+
+
+# ---------------------------------------------------------------------------
+# live_plc_io_list: the Python-side shaping must not need EPLAN
+# ---------------------------------------------------------------------------
+
+def test_split_identifier_iec_parts():
+    assert live._split_identifier("=ST1+CE-A1:DI a.0") == {
+        "installation": "=ST1", "location": "+CE", "device": "-A1",
+        "connectionPoint": "DI a.0"}
+    assert live._split_identifier("=+CE-A2:0+")["installation"] == "="
+    assert live._split_identifier("-X1:12") == {
+        "installation": "", "location": "", "device": "-X1", "connectionPoint": "12"}
+
+
+def test_split_multilingual_and_neutral_text():
+    assert live._split_multilingual("es_ES@Marcha;en_US@Start;") == {"es_ES": "Marcha", "en_US": "Start"}
+    assert live._split_multilingual("??_??@Presion;") == {"*": "Presion"}
+    assert live._split_multilingual("") == {}
+
+
+@pytest.mark.parametrize("address,dtype,cp,kind", [
+    ("I0.0", "BOOL", "DI a.0", "DI"),
+    ("Q0.1", "BOOL", "DQ a.1", "DO"),
+    ("IW96", "WORD", "0+", "AI"),
+    ("QW80", "INT", "0+", "AO"),
+    ("", "", "L+", "supply"),
+    ("", "", "DI a.7", "other"),
+])
+def test_plc_kind(address, dtype, cp, kind):
+    assert live._plc_kind(address, dtype, cp) == kind
+
+
+def test_shape_plc_io_groups_by_installation_and_picks_manual_over_automatic():
+    raw = {
+        "success": True, "matched": 2,
+        "rawPoints": [
+            {"name": "=ST1+CE-A1:DI a.0", "FUNC_FULLDEVICETAG": "=ST1+CE-A1",
+             "FUNC_CONNECTIONDESIGNATION1": "DI a.0", "FUNC_PLCADDRESS": "I0.0",
+             "FUNC_PLCDATATYPE": "BOOL", "FUNC_TEXT": "es_ES@Marcha;en_US@Start;",
+             "FUNC_PLCSYMBOLICADDRESS_MANUAL": "ST1_Start",
+             "FUNC_PLCSYMBOLICADDRESS_AUTOMATIC": "auto", "page": "=ST1+CE/2"},
+            {"name": "=ST2+CE-A1:DI a.0", "FUNC_FULLDEVICETAG": "=ST2+CE-A1",
+             "FUNC_CONNECTIONDESIGNATION1": "DI a.0", "FUNC_PLCADDRESS": "I1.0",
+             "FUNC_PLCDATATYPE": "BOOL", "FUNC_TEXT": "", "page": ""},
+        ],
+        "rawBoxes": [
+            {"name": "=ST1+CE-A1", "FUNC_FULLDEVICETAG": "=ST1+CE-A1", "FUNC_PLCCPU": "1",
+             "FUNC_PLCRACK": "0", "FUNC_PLC_SUBSLOT": "1", "parts": ["SIE.X"],
+             "FUNC_TEXT": "en_US@CPU;", "page": "=ST1+CE/2"},
+        ],
+    }
+    out = live._shape_plc_io(raw)
+    assert out["success"] and out["returned"] == 2 and out["matched"] == 2
+    assert out["byInstallation"] == {"=ST1": 1, "=ST2": 1}
+    p0 = out["points"][0]
+    assert p0["installation"] == "=ST1" and p0["device"] == "-A1" and p0["kind"] == "DI"
+    assert p0["symbolicAddress"] == "ST1_Start"
+    assert p0["functionText"] == {"es_ES": "Marcha", "en_US": "Start"}
+    m0 = out["modules"][0]
+    assert m0["isCpu"] is True and m0["rack"] == "0" and m0["slot"] == "1" and m0["parts"] == ["SIE.X"]
+
+
+def test_plc_io_list_filters_are_interpolated_safely(capture):
+    live.live_plc_io_list(contains=INJECTION, include_unaddressed=True, limit="25")
+    cs = capture["script"]
+    assert _string_literals_balanced(cs)
+    assert "!true) continue;" in cs
+    assert "points.Count >= 25" in cs
+
+
+def test_plc_io_list_returns_raw_result_when_script_failed(monkeypatch):
+    monkeypatch.setattr(live, "_execute_script", lambda s, timeout=0: {"success": False, "error": "boom"})
+    out = live.live_plc_io_list()
+    assert out == {"success": False, "error": "boom"}
+
+
+# ---------------------------------------------------------------------------
+# reports_live: generated C# shape and the S029153 hint
+# ---------------------------------------------------------------------------
+
+def test_create_report_script_shape(monkeypatch):
+    from api.actions import reports_live
+    captured = {}
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True, "results": {"success": True}})
+    reports_live.live_create_report("TerminalDiagram", form_name="F13_001")
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"TerminalDiagram"' in cs and '"F13_001"' in cs
+    assert '{ block, "/1" }' in cs, "empty first-page name is refused by EPLAN (S029035)"
+    assert "GenerateProject" in cs
+    for line in cs.splitlines():
+        if line.strip().startswith("using "):
+            assert "Eplan.EplApi.DataModel" not in line and "Eplan.EplApi.HEServices" not in line
+
+
+def test_create_report_without_generate_and_injection(monkeypatch):
+    from api.actions import reports_live
+    captured = {}
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True, "results": {}})
+    reports_live.live_create_report(INJECTION, form_name=INJECTION, page_name=INJECTION, generate=False)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "if (false)" in cs
+
+
+def test_create_report_adds_hint_on_missing_form(monkeypatch):
+    from api.actions import reports_live
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: {"success": False, "error": "Exception: S029153 El formulario no se ha encontrado"})
+    out = reports_live.live_create_report("PartsList", form_name="F03_001")
+    assert "F03_001" in out["hint"] and "Sincronizar" in out["hint"]
+
+
+def test_report_types_script_is_read_only(monkeypatch):
+    from api.actions import reports_live
+    captured = {}
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    reports_live.live_report_types()
+    assert "GuardScratch(project," not in captured["script"], "read-only tool must not run the write guard"
+    assert "PAGE_FORMULAR" in captured["script"]
+
+
+# ---------------------------------------------------------------------------
+# structure_live: copy pages to another installation designation
+# ---------------------------------------------------------------------------
+
+def test_copy_pages_script_shape(monkeypatch):
+    from api.actions import structure_live
+    captured = {}
+    monkeypatch.setattr(structure_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    structure_live.live_copy_pages_to_structure(["+CE/2"], ["=ST2", "ST3"], keep_devices=["-A1"], location="+CE")
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert 'new string[] { "ST2", "ST3" }' in cs, "leading = must be stripped"
+    assert 'string locOverride = "CE";' in cs, "leading + must be stripped"
+    assert 'new string[] { "-A1" }' in cs
+    assert 'Enum.Parse(nmT, "Ignore")' in cs
+    assert 'GetWritable(pl.GetType(), "VisibleName")' in cs
+
+
+def test_copy_pages_rejects_bad_lists():
+    from api.actions import structure_live
+    assert structure_live.live_copy_pages_to_structure([], ["ST2"])["success"] is False
+    assert structure_live.live_copy_pages_to_structure(["+CE/2"], [])["success"] is False
+    assert structure_live.live_copy_pages_to_structure("+CE/2", ["ST2"])["success"] is False
+
+
+def test_copy_pages_injection_stays_in_literal(monkeypatch):
+    from api.actions import structure_live
+    captured = {}
+    monkeypatch.setattr(structure_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    structure_live.live_copy_pages_to_structure([INJECTION], [INJECTION], keep_devices=[INJECTION], location=INJECTION)
+    assert _string_literals_balanced(captured["script"])
+
+
+# ---------------------------------------------------------------------------
+# panel_live: captions read / edit
+# ---------------------------------------------------------------------------
+
+def _capture_panel(monkeypatch):
+    from api.actions import panel_live
+    captured = {}
+    monkeypatch.setattr(panel_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    return panel_live, captured
+
+
+def test_panel_captions_read_is_guard_free(monkeypatch):
+    panel_live, captured = _capture_panel(monkeypatch)
+    panel_live.live_panel_captions("+CE/0", ref=INJECTION)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project," not in cs
+    assert "PropertyPlacements" in cs and "GetBoundingBox" in cs
+
+
+def test_set_panel_captions_script_shape(monkeypatch):
+    panel_live, captured = _capture_panel(monkeypatch)
+    panel_live.live_set_panel_captions("+CE/0", "124/17/1409/0", hide=[20100, "PTIO-IN"], show=["20450"],
+                                       positions={"20010": [386, 223]}, legend_position=9)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"UseLocalPropertyPlacements"' in cs, "edits must switch to the local arrangement first"
+    assert 'new string[] { "20100", "PTIO-IN" }' in cs
+    assert 'new string[] { "20450" }' in cs
+    assert 'new string[] { "20010", "386.0", "223.0" }' in cs
+    assert "op_Implicit" in cs and "new object[] { 9 }" in cs
+    assert '"IsDocked"' in cs
+
+
+def test_set_panel_captions_rejects_bad_positions():
+    from api.actions import panel_live
+    assert panel_live.live_set_panel_captions("+CE/0", "-X1", positions=[1, 2])["success"] is False
+    assert panel_live.live_set_panel_captions("+CE/0", "-X1", positions={"20010": [1]})["success"] is False
+    assert panel_live.live_set_panel_captions("+CE/0", "-X1", legend_position="x")["success"] is False
+
+
+def test_set_panel_captions_without_legend_skips_indexer(monkeypatch):
+    panel_live, captured = _capture_panel(monkeypatch)
+    panel_live.live_set_panel_captions("+CE/0", "-X1", hide=[INJECTION], positions={INJECTION: [0, 0]})
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "if (false)" in cs

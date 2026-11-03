@@ -260,6 +260,25 @@ _HELPERS_SCHEMATIC = r'''
         object loc = TryRead(pl, "Location", absent);
         if (loc != null) d["location"] = PtDict(loc);
 
+        // A wire label (connection definition point) is only useful with what
+        // it says: the duplicate-label check compares these.
+        if (pl.GetType().Name == "ConnectionDefinitionPoint")
+        {
+            try
+            {
+                object cp = GetReadable(pl.GetType(), "Properties").GetValue(pl, null);
+                string[] keys = new string[] { "CONNECTION_DESIGNATION", "CONNECTION_WIRENUMBER", "CONNECTION_WIRECROSSSECTION" };
+                string[] names = new string[] { "designation", "wireNumber", "crossSection" };
+                for (int k = 0; k < keys.Length; k++)
+                {
+                    object v = TryRead(cp, keys[k], null);
+                    string s = v == null ? "" : SafeText(v);
+                    if (!string.IsNullOrEmpty(s)) d[names[k]] = s;
+                }
+            }
+            catch (Exception ex) { absent.Add("Properties (threw: " + Flatten(ex) + ")"); }
+        }
+
         MethodInfo bbox = MethodByShape(pl.GetType(), "GetBoundingBox", new string[] { }, false);
         if (bbox != null)
         {

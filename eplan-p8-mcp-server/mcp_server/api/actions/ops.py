@@ -1118,6 +1118,44 @@ def _segment_crosses(seg, r, margin=0.01):
         y0 == y1 and r[1] + margin < y0 < r[3] - margin and min(x1, r[2]) - max(x0, r[0]) > margin)
 
 
+def _duplicate_labels(placements, max_gap=12.0, limit=100):
+    """
+    Wire labels (connection definition points) that say the same thing on
+    the same wire: two labels with the same designation, colour and section
+    on one vertical or horizontal line, closer than max_gap mm. EPLAN draws
+    both, so the wire reads "24V BU 2.5" twice. They appear when labels are
+    written in two passes after the connections were regenerated in between:
+    the second pass does not see the first pass's label on the new connection.
+
+    One entry per pair: {"a", "b", "designation", "gap_mm"}.
+    """
+    labels = []
+    for pl in placements:
+        if pl.get("clrType") != "ConnectionDefinitionPoint" or not pl.get("designation"):
+            continue
+        loc = pl.get("location") or {}
+        if loc.get("x") is None or loc.get("y") is None:
+            continue
+        key = (pl.get("designation"), pl.get("wireNumber") or "", pl.get("crossSection") or "")
+        labels.append((key, float(loc["x"]), float(loc["y"]), pl))
+    found = []
+    for i in range(len(labels)):
+        ka, xa, ya, a = labels[i]
+        for j in range(i + 1, len(labels)):
+            kb, xb, yb, b = labels[j]
+            if ka != kb:
+                continue
+            same_col, same_row = abs(xa - xb) < 0.5, abs(ya - yb) < 0.5
+            gap = abs(ya - yb) if same_col else abs(xa - xb) if same_row else None
+            if gap is None or gap > max_gap:
+                continue
+            found.append({"a": _who(a), "b": _who(b), "designation": " ".join(k for k in ka if k),
+                          "gap_mm": round(gap, 2)})
+            if len(found) >= limit:
+                return found
+    return found
+
+
 def _overlaps(placements, min_area=2.0, limit=100):
     """
     What collides on the page, from the read-back:
@@ -1609,9 +1647,12 @@ def live_check_page(page: str, limit: int = 200, project_name: str = None,
     """
     Check a page and report what is wrong with it, in one call. Read-only.
 
-    Runs EPLAN's page check, reads the itemized messages it produced, and
-    reads the page back to find device outlines that overlap each other.
-    Call it after a batch, before telling the user the page is done.
+    Runs EPLAN's page check, reads the itemized messages it produced, reads
+    the page back to find device outlines and texts that overlap each other,
+    and reads the wire labels to find duplicates (the same "24V BU 2.5"
+    twice on one wire, left behind when labels were written in two passes
+    around a connection regeneration). Call it after a batch, before telling
+    the user the page is done.
 
     Args:
         page: Page name.
@@ -1622,21 +1663,31 @@ def live_check_page(page: str, limit: int = 200, project_name: str = None,
     Returns:
         {"success", "check": the check action's result, "messages": [...]
          (as live_read_check_messages), "overlaps": [{"a", "b", "area_mm2"}],
-         "placementCount"}
+         "duplicateLabels": [{"a", "b", "designation", "gap_mm"}],
+         "labelCount", "placementCount"}
     """
     from .verify import check_pages
     chk = check_pages(page_name=page, project_name=project_name)
     msgs = live.live_read_check_messages(limit=int(limit), timeout_seconds=timeout_seconds)
     msg_list = (msgs.get("results") or {}).get("messages") if isinstance(msgs.get("results"), dict) else msgs.get("messages")
     page_out = run_ops(page, [], read_back=True, write=False, timeout_seconds=timeout_seconds)
+    # Labels are read apart from the devices: their boxes are not outlines
+    # and must not feed the overlap check.
+    labels_out = run_ops(page, [], read_back=True, write=False, pins=False,
+                         types=["ConnectionDefinitionPoint"], timeout_seconds=timeout_seconds)
+    labels = (labels_out.get("page_after") or {}).get("placements") or []
     out = {
         "success": bool(chk.get("success")) and bool(page_out.get("success")),
         "check": chk,
         "messages": msg_list or [],
         "messagesTotal": (msgs.get("results") or msgs).get("total"),
         "overlaps": page_out.get("overlaps") or [],
+        "duplicateLabels": _duplicate_labels(labels) if labels_out.get("success") else [],
+        "labelCount": len(labels),
         "placementCount": (page_out.get("page_after") or {}).get("placementCount"),
     }
     if not page_out.get("success"):
         out["error"] = page_out.get("error")
+    elif not labels_out.get("success"):
+        out["labelsError"] = labels_out.get("error")
     return out

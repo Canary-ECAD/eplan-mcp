@@ -92,11 +92,22 @@ It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   duplicate tag is refused unless allowed), `eplan_live_render_page` (export
   the page to PNG to look at it) and `eplan_live_check_page` (page check +
   itemized messages + overlapping device outlines, in one call).
+  itemized messages + overlapping outlines/texts + duplicate wire labels, in
+  one call).
+  Includes 2 Data Portal tools that use EPLAN's own Data Portal sign-in:
+  `eplan_dataportal_search_count` (read-only) and
+  `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
+  download is a dialog in EPLAN, so its result carries a `userAction` the model
+  must relay to the user before waiting on the import.
   Includes 5 discovery tools (`eplan_settings_list_children`,
   `eplan_list_schemes`, `eplan_list_report_templates`, `eplan_list_layers`,
   `eplan_list_enums`) that enumerate real EPLAN catalogs instead of guessing,
-  5 live-DataModel tools (`eplan_live_query_functions`,
-  `eplan_live_query_pages`, `eplan_live_set_function_text`,
+  6 live-DataModel tools (`eplan_live_query_functions`,
+  `eplan_live_query_pages`, `eplan_live_plc_io_list` (the PLC I/O
+  assignment list as JSON: identifier split into =/+/- parts, address,
+  symbolic address, data type, function text per language, module, page,
+  plus the PLC boxes with CPU/rack/slot/device name),
+  `eplan_live_set_function_text`,
   `eplan_live_set_connection_designations`,
   `eplan_live_read_check_messages`) that read/edit the open project's
   object model via runtime reflection (see §4 below) - the last of these reaches
@@ -253,7 +264,12 @@ All of these exist as `eplan_*` tools:
 - **Print:** project or pages.
 - **Check / verify:** project, pages, parts (with verification schemes).
 - **Generate:** connections, cables.
-- **Reports / evaluations:** update reports, model views, copper unfolds,
+- **Reports / evaluations:** `eplan_live_report_types` (the DocumentType
+  names + the report pages the project already has) and
+  `eplan_live_create_report` (add a cover sheet / parts list / terminal
+  diagram / panel legend ... with a given form and generate its pages; the
+  form must already be in the project master data, else S029153 with a
+  hint), update reports, model views, copper unfolds,
   drilling views.
 - **Search:** devices, texts, all properties, page data, project data.
 - **Navigation / editing:** open page, go to device, open layout space, close
@@ -276,12 +292,28 @@ All of these exist as `eplan_*` tools:
 - **Ribbon & add-ons:** export/import ribbon bar, load API module, register/
   unregister add-on, and `execute_raw_action` for any action not wrapped.
 - **Scripted advanced APIs (run as C#):** direct **parts database** queries
-  (`parts_db_*`), **typed settings** get/set
+  (`parts_db_*`; `eplan_parts_db_get_part` also returns every filled record
+  property - ARTICLE_NOTE with the manufacturer's technical text, voltages,
+  pressure, PLC station type - and the function templates), **typed settings** get/set
   (`settings_get/set_string|bool|int|double`), **PathMap** variable substitution,
   and `execute_custom_script` to run arbitrary C# inside EPLAN.
 - **Live DataModel (read/edit the open project via reflection):**
   `eplan_live_query_functions`, `eplan_live_query_pages` (read, with substring
-  filter + result limit), `eplan_live_set_function_text` (write `FUNC_TEXT`,
+  filter + result limit), `eplan_live_plc_io_list` (read: every PLC
+  connection point with address, symbolic address, data type, channel,
+  function text per language, page and module, grouped by =installation so
+  repeated stations map to an array index; use it before `eplan_plc_export`
+  when the PLC programmer only needs the list, not a TIA import file),
+  `eplan_live_panel_captions` / `eplan_live_set_panel_captions` (the
+  property texts next to a panel item - tag, part, type, legend index -
+  with their boxes in page mm; hide/show/move them and set the legend
+  position, always on a LOCAL property arrangement so other items are not
+  dragged along),
+  `eplan_live_copy_pages_to_structure` (repeated stations: copy drawn
+  pages to =ST2, =ST3 ... and retag every device on the copies, keeping the
+  shared ones such as the CPU; wire numbers and PLC addresses are copied
+  as-is and must be renumbered afterwards),
+  `eplan_live_set_function_text` (write `FUNC_TEXT`,
   defaults to one function at a time, returns the previous value),
   `eplan_live_set_connection_designations` (write the indexed
   `FUNC_CONNECTIONDESIGNATION` property, re-reads after writing to confirm),

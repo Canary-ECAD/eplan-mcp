@@ -331,3 +331,24 @@ def test_target_project_reaches_scripts_and_actions():
 def test_target_must_be_an_elk():
     out = target.live_set_target_project(r"D:\EPLAN\Test")
     assert out["success"] is False and target.get() == ""
+
+
+def test_duplicate_labels_same_wire_only():
+    def lab(h, x, y, des="24V", col="BU", sec="2.5"):
+        return {"clrType": "ConnectionDefinitionPoint", "handle": h, "location": {"x": x, "y": y},
+                "designation": des, "wireNumber": col, "crossSection": sec}
+    a = lab("1", 60, 150)
+    b = lab("2", 60, 145)                       # 5 mm below a on the same wire: duplicate
+    c = lab("3", 60, 125)                       # 25 mm away: the next wire's own label
+    d = lab("4", 76, 150, des="GND")            # another wire, another text
+    e = lab("5", 88, 194, des="24V", sec="1.5")
+    f = lab("6", 88, 189, des="24V", sec="1.5") # duplicate pair on a vertical wire
+    g = lab("7", 100, 189, des="24V", sec="1.5")  # same row as f, 12 mm: a neighbouring wire
+    dev = {"clrType": "Terminal", "handle": "9", "name": "-X1:1", "location": {"x": 60, "y": 132}}
+    found = ops._duplicate_labels([a, b, c, d, e, f, g, dev])
+    pairs = {(p["a"]["handle"], p["b"]["handle"]) for p in found}
+    assert pairs == {("1", "2"), ("5", "6"), ("6", "7")}
+    assert {p["designation"] for p in found} == {"24V BU 2.5", "24V BU 1.5"}
+    assert found[0]["gap_mm"] == 5.0
+    # A label without text is nothing to compare.
+    assert ops._duplicate_labels([lab("1", 0, 0, des=""), lab("2", 0, 2, des="")]) == []

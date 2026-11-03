@@ -351,9 +351,24 @@ from .introspect import (
 )
 
 # Live DataModel (read/edit the project open in EPLAN, via runtime reflection)
+from .panel_live import (
+    live_panel_captions,
+    live_set_panel_captions,
+)
+
+from .structure_live import (
+    live_copy_pages_to_structure,
+)
+
+from .reports_live import (
+    live_report_types,
+    live_create_report,
+)
+
 from .live import (
     live_query_functions,
     live_query_pages,
+    live_plc_io_list,
     live_set_function_text,
     live_set_connection_designations,
     live_read_check_messages,
@@ -533,7 +548,10 @@ __all__ = [
     # API introspection
     'api_types', 'api_describe',
     # Live DataModel
-    'live_query_functions', 'live_query_pages', 'live_set_function_text',
+    'live_report_types', 'live_create_report',
+    'live_copy_pages_to_structure',
+    'live_panel_captions', 'live_set_panel_captions',
+    'live_query_functions', 'live_query_pages', 'live_plc_io_list', 'live_set_function_text',
     'live_set_connection_designations', 'live_read_check_messages',
     'live_symbol_catalog', 'live_create_page', 'live_place_symbol',
     'live_connect_pins', 'live_read_page', 'live_remove_placement',
