@@ -72,7 +72,7 @@ def live_copy_pages_to_structure(pages: list, target_plants: list,
     Returns:
         {"success", "copies": [{"source", "plant", "newPage", "retagged",
         "kept": [...], "errors": [...]}], "pagesCreated": [...], "failed"}.
-        Sub-pages (/2.a) are not handled: the copy keeps the counter only.
+        Sub-pages (/2.a) keep their sub-counter on the copy (=ST2+CE/2.a).
     """
     try:
         if not isinstance(pages, list) or not pages:
@@ -124,11 +124,16 @@ def live_copy_pages_to_structure(pages: list, target_plants: list,
                         string loc = locOverride != "" ? locOverride : srcLoc;
                         int counter = 0;
                         try { counter = int.Parse(PropText(sprops, "PAGE_COUNTER")); } catch { }
+                        string sub = "";
+                        try { sub = PropText(sprops, "PAGE_SUBCOUNTER") ?? ""; } catch { }
 
                         object ppl = Activator.CreateInstance(pplT);
                         SetProp(ppl, "DESIGNATION_PLANT", plant);
                         if (loc != "") SetProp(ppl, "DESIGNATION_LOCATION", loc);
                         SetProp(ppl, "PAGE_COUNTER", (int)counter);
+                        // "+CE/2.a" keeps its sub-counter; without this the copy
+                        // lands on "=ST2+CE/2" and collides with the main page.
+                        if (sub != "") SetProp(ppl, "PAGE_SUBCOUNTER", sub);
 
                         object np = Call(copyTo, src, new object[] { project, ppl, mode, overwrite });
                         if (np == null) throw new Exception("CopyTo returned null (target page exists and overwrite=false?)");

@@ -686,6 +686,47 @@ _OPS_HELPERS = r'''
         r["handle"] = Handle(dcl);
     }
 
+    static void OpText(object page, JObject a, Dictionary<string, object> r)
+    {
+        // Free text (Graphics.Text): the notes, titles and labels a page
+        // carries that belong to no device. Verified on 2026.0.3: the
+        // instance Create(Page, string, double textHeight) places it, the
+        // content is the MultiLangString `Contents` (so "es_ES@..;en_US@..;"
+        // works like a function text), position is Location, and Height /
+        // Rotation / Justification (JustificationType) are plain members.
+        string content = Req(a, "text");
+        double height = D(a, "height", 2.5);
+        Type tt = FindType("Eplan.EplApi.DataModel.Graphics.Text");
+        object t = Activator.CreateInstance(tt);
+        if (content.Contains("@") && content.Contains(";"))
+        {
+            // "es_ES@..;en_US@..;" is EPLAN's own multilingual encoding; the
+            // string overload would store it literally, so build the
+            // MultiLangString and use that overload.
+            MethodInfo createMl = RequireMethod(tt, "Create", new string[] { "Page", "MultiLangString", "Double" }, false);
+            Type mlT = createMl.GetParameters()[1].ParameterType;
+            object ml = Activator.CreateInstance(mlT);
+            Call(RequireMethod(mlT, "SetAsString", new string[] { "String" }, false), ml, new object[] { content });
+            Call(createMl, t, new object[] { page, ml, height });
+        }
+        else
+            Call(RequireMethod(tt, "Create", new string[] { "Page", "String", "Double" }, false), t, new object[] { page, content, height });
+        PropertyInfo locP = RequireWritable(tt, "Location");
+        locP.SetValue(t, MakePoint(locP.PropertyType, D(a, "x", 0), D(a, "y", 0)), null);
+        if (Has(a, "angle")) RequireWritable(tt, "Rotation").SetValue(t, D(a, "angle", 0), null);
+        if (Has(a, "justification"))
+        {
+            PropertyInfo j = RequireWritable(tt, "Justification");
+            try { j.SetValue(t, Enum.Parse(j.PropertyType, S(a, "justification", ""), true), null); }
+            catch (Exception) { throw new Exception("Unknown justification '" + S(a, "justification", "") + "'. Valid: " + string.Join(", ", Enum.GetNames(j.PropertyType))); }
+        }
+        if (Has(a, "layer")) { PropertyInfo lp = GetWritable(tt, "Layer"); if (lp != null) { object lay = Enum.Parse(lp.PropertyType, S(a, "layer", ""), true); lp.SetValue(t, lay, null); } }
+        if (Has(a, "properties")) SetProps(t, (JObject)a["properties"], r);
+        r["handle"] = Handle(t);
+        try { r["text"] = Call(RequireMethod(tt, "GetDisplayString", new string[] { }, false), t, null); } catch { }
+        r["height"] = PropText(t, "Height");
+    }
+
     static void OpFind(object page, JObject a, Dictionary<string, object> r)
     {
         string name = S(a, "name", null), contains = S(a, "contains", null), type = S(a, "type", null);
@@ -752,9 +793,10 @@ _OPS_HELPERS = r'''
             case "remove": OpRemove(page, a, labels, r); break;
             case "dimension": OpDimension(page, a, r); break;
             case "line": OpLine(page, a, r); break;
+            case "text": OpText(page, a, r); break;
             case "find": OpFind(page, a, r); break;
             case "read": OpRead(page, a, labels, r); break;
-            default: throw new Exception("Unknown op '" + kind + "'. Known: place, rect, macro, update, move, remove, dimension, line, find, read.");
+            default: throw new Exception("Unknown op '" + kind + "'. Known: place, rect, macro, update, move, remove, dimension, line, text, find, read.");
         }
     }
 
@@ -1297,6 +1339,10 @@ def live_batch(page: str, operations: list, read_back: bool = False,
       remove    ref or refs[] (a group takes its sub-placements with it).
       dimension x1, y1, x2, y2, lineX, lineY.
       line      x1, y1, x2, y2 (horizontal or vertical connection line).
+      text      x, y, text ("es_ES@..;en_US@..;" for bilingual), height=2.5,
+                angle?, justification? (a JustificationType name; the
+                error lists them), properties? - a free text that belongs
+                to no device (a note, a title, a legend).
       find      name? contains? type? firstLevel? limit?  (read-only)
       read      ref, pins=true                             (read-only)
 

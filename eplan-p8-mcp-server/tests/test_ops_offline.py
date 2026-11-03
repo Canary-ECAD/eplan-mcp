@@ -91,7 +91,7 @@ def test_interpreter_has_the_traps_covered():
     assert "ResolveProject(" in cs and "GuardScratch(" in cs
     assert '[DeclareAction("McpOps_t")]' in cs
     assert "[Start]" in cs
-    for op in ("place", "rect", "macro", "update", "move", "remove", "dimension", "line", "find", "read"):
+    for op in ("place", "rect", "macro", "update", "move", "remove", "dimension", "line", "text", "find", "read"):
         assert 'case "%s":' % op in cs
 
 

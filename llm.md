@@ -78,7 +78,7 @@ It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   redirect a write; set it right after opening the project) and 10 batched
   page-operation tools built on ONE C# interpreter that runs a list of ops per
   script and is registered as an EPLAN action for the session so later
-  batches skip the compile: `eplan_live_batch` (place / rect / macro / update /
+  batches skip the compile: `eplan_live_batch` (ops: place, rect, macro, update, move, remove, dimension, line, text - a free page text, bilingual with "es_ES@..;en_US@..;" -, find, read) (place / rect / macro / update /
   move / remove / dimension / line / find / read, objects addressed by handle,
   by device tag, or by `$label` of an earlier op), `eplan_live_find_placements`
   (by tag - handles do not survive an EPLAN restart, tags do),
@@ -313,6 +313,24 @@ All of these exist as `eplan_*` tools:
   pages to =ST2, =ST3 ... and retag every device on the copies, keeping the
   shared ones such as the CPU; wire numbers and PLC addresses are copied
   as-is and must be renumbered afterwards),
+  `eplan_live_terminal_strips` (every strip with its terminal count and
+  whether it has a terminal strip definition) and
+  `eplan_live_set_terminal_strip_definition` (create the missing
+  definition - unplaced, or placed as SPECIAL/TDEF on a page - with text
+  and part; PLC connection points are not strip terminals),
+  `eplan_live_cables` (cables with their conductors: wire number, colour,
+  cross-section, source, target), `eplan_live_place_cable_definition`
+  (draw the cable definition line across wires, name it with the page's
+  structure, then assign the crossed connections and regenerate; keep the
+  line clear of the wire-number symbols) and
+  `eplan_live_assign_cable_connections` (re-run the geometric assignment
+  for a line placed by hand or moved: EPLAN does not assign conductors to
+  an API-placed line on its own),
+  `eplan_live_project_templates` (the .zw9 basic projects / .ept templates
+  under $(MD_TEMPLATES)) and `eplan_live_create_project` (new project from
+  one of them via ProjectManager.CreateProject, left open and set as the
+  target; the path must be under the scratch root unless
+  allow_real_project),
   `eplan_live_set_function_text` (write `FUNC_TEXT`,
   defaults to one function at a time, returns the previous value),
   `eplan_live_set_connection_designations` (write the indexed

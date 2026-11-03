@@ -43,6 +43,7 @@ ALL_TOOLS = [
 ]
 
 
+
 # ---------------------------------------------------------------------------
 # The CS0234 trap: DataModel/HEServices must never appear as `using` directives
 # ---------------------------------------------------------------------------
@@ -593,3 +594,152 @@ def test_set_panel_captions_without_legend_skips_indexer(monkeypatch):
     cs = captured["script"]
     assert _string_literals_balanced(cs)
     assert "if (false)" in cs
+
+
+# ---------------------------------------------------------------------------
+# terminals_live / cables_live / project_live
+# ---------------------------------------------------------------------------
+
+def _capture(monkeypatch, module):
+    captured = {}
+    monkeypatch.setattr(module, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    return captured
+
+
+def test_terminal_strips_read_is_guard_free(monkeypatch):
+    from api.actions import terminals_live
+    captured = _capture(monkeypatch, terminals_live)
+    terminals_live.live_terminal_strips(contains=INJECTION)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project," not in cs
+    assert '"TerminalStrip"' in cs and '== "Terminal"' in cs, "PLC points must be filtered by category"
+
+
+def test_set_terminal_strip_definition_script_shape(monkeypatch):
+    from api.actions import terminals_live
+    captured = _capture(monkeypatch, terminals_live)
+    terminals_live.live_set_terminal_strip_definition("-X1", text=INJECTION, part="PXC.1", properties={"FUNC_SUPPLEMENTARYFIELD1": INJECTION})
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"TerminalDefText", (short)1, (short)1' in cs
+    assert 'RequireMethod(tsT, "Create", new string[] { "Project", "FunctionDefinition" }' in cs
+    assert "propsIn[\"FUNC_SUPPLEMENTARYFIELD1\"]" in cs
+
+
+def test_set_terminal_strip_definition_placed_uses_create_page(monkeypatch):
+    from api.actions import terminals_live
+    captured = _capture(monkeypatch, terminals_live)
+    terminals_live.live_set_terminal_strip_definition("-X1", page="+CE/2", x=300, y=200)
+    cs = captured["script"]
+    assert 'RequireMethod(tsT, "Create", new string[] { "Page" }' in cs
+    assert "300.0, 200.0" in cs
+    assert terminals_live.live_set_terminal_strip_definition("-X1", page="+CE/2")["success"] is False
+
+
+def test_cables_read_is_guard_free(monkeypatch):
+    from api.actions import cables_live
+    captured = _capture(monkeypatch, cables_live)
+    cables_live.live_cables(contains=INJECTION)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project," not in cs
+    assert '"CableConnections"' in cs and '"CONNECTION_DESIGNATION"' in cs
+
+
+def test_place_cable_definition_script_shape(monkeypatch):
+    from api.actions import cables_live
+    captured = _capture(monkeypatch, cables_live)
+    cables_live.live_place_cable_definition("+CE/2", "-W1", 70, 112, 220, 112, text=INJECTION, generate=False)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert 'MakeVariantT(project, "SPECIAL", "CABDL", 0)' in cs
+    assert "MakePoint(pt, 70.0, 112.0), MakePoint(pt, 220.0, 112.0)" in cs
+    assert '"DESIGNATION_LOCATION"' in cs, "a bare -W1 must take the page structure"
+    assert cables_live.live_place_cable_definition("+CE/2", "-W1", "a", 1, 2, 3)["success"] is False
+
+
+def test_assign_cable_connections_script_shape(monkeypatch):
+    from api.actions import cables_live
+    captured = _capture(monkeypatch, cables_live)
+    cables_live.live_assign_cable_connections("+CE/2", INJECTION, generate=False)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"CableNameParts"' in cs and '"CableDefinitionLine"' in cs
+    assert '"StartSymbolConnPoint"' in cs, "pin offsets are added to the device location"
+
+
+def test_create_project_refuses_outside_scratch(tmp_path, monkeypatch):
+    from api.actions import project_live
+    tpl = tmp_path / "t.zw9"
+    tpl.write_text("x")
+    r = project_live.live_create_project(r"C:\Projects\Real.elk", str(tpl))
+    assert r["success"] is False and "scratch" in r["error"]
+    r = project_live.live_create_project(str(tmp_path / "p.elk"), str(tmp_path / "missing.zw9"))
+    assert r["success"] is False and "Template not found" in r["error"]
+
+
+def test_create_project_clears_target_for_the_call(tmp_path, monkeypatch):
+    from api.actions import project_live, target
+    monkeypatch.setattr(project_live, "SCRATCH_ROOT", str(tmp_path))
+    tpl = tmp_path / "t.zw9"
+    tpl.write_text("x")
+    seen = {}
+
+    def fake(script, timeout=0):
+        seen["target_during"] = target.get()
+        seen["script"] = script
+        return {"success": True, "results": {"success": True, "project": "P"}}
+    monkeypatch.setattr(project_live, "_execute_script", fake)
+    target.set_target(r"D:\old.elk")
+    r = project_live.live_create_project(str(tmp_path / "new" / "P.elk"), str(tpl))
+    assert seen["target_during"] == ""
+    assert "CreateProject" in seen["script"] and _string_literals_balanced(seen["script"])
+    assert target.get().lower().endswith("p.elk")
+    target.set_target("")
+
+
+def test_project_templates_lists_zw9(tmp_path):
+    from api.actions import project_live
+    (tmp_path / "a.zw9").write_text("x")
+    (tmp_path / "b.ept").write_text("x")
+    (tmp_path / "c.txt").write_text("x")
+    r = project_live.live_project_templates(str(tmp_path))
+    assert r["success"] and r["count"] == 2
+    assert {t["kind"] for t in r["templates"]} == {"basic project", "template"}
+
+
+def test_assign_cable_connections_reassign_runs_after_conductors_exist(monkeypatch):
+    from api.actions import cables_live, generate
+    scripts = []
+
+    def fake_exec(script, timeout=0):
+        scripts.append(script)
+        return {"success": True, "results": {"success": True, "handle": "h", "cable": "=+CE-W1",
+                                             "crossed": [{"designation": "201", "assigned": "now"}],
+                                             "reassignedFromPart": "if (true)" in script}}
+    monkeypatch.setattr(cables_live, "_execute_script", fake_exec)
+    monkeypatch.setattr(generate, "generate_connections", lambda **kw: {"success": True})
+    monkeypatch.setattr(cables_live, "live_cables",
+                        lambda **kw: {"results": {"cables": [{"handle": "h", "conductors": [{"designation": "201"}]}]}})
+    r = cables_live.live_assign_cable_connections("+CE/2", "-W1", generate=True)
+    assert len(scripts) == 1 and "if (false)" in scripts[0]
+    scripts.clear()
+    r = cables_live.live_assign_cable_connections("+CE/2", "-W1", generate=True, reassign_from_part=True)
+    assert len(scripts) == 2 and "if (false)" in scripts[0] and "if (true)" in scripts[1]
+    assert "DoReassignWires" in scripts[1] and _string_literals_balanced(scripts[1])
+    assert r["results"]["reassignedFromPart"] is True and r["results"]["connectionsGenerated"] == 2
+
+
+def test_copy_pages_keeps_subcounter(monkeypatch):
+    from api.actions import structure_live
+    captured = {}
+    monkeypatch.setattr(structure_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    structure_live.live_copy_pages_to_structure(["+CE/2.a"], ["ST2"])
+    cs = captured["script"]
+    assert '"PAGE_SUBCOUNTER"' in cs and 'SetProp(ppl, "PAGE_SUBCOUNTER", sub)' in cs
