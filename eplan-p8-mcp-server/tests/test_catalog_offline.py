@@ -442,9 +442,9 @@ def test_ribbon_catalog_default_view_is_a_compact_index(fake_ribbon):
     assert r["success"] is True and r["view"] == "index"
     assert r["tabs"] == [
         {"tab": "Home", "identifier": "Start", "is_custom": False,
-         "groups": 1, "commands": 2},
+         "groups": 1, "commands": 2, "dropdown_entries": 0},
         {"tab": "Insert", "identifier": "Insert", "is_custom": False,
-         "groups": 1, "commands": 1},
+         "groups": 1, "commands": 1, "dropdown_entries": 0},
     ]
     # the index must not carry the per-command payload it exists to avoid
     assert "Paste" not in json.dumps(r)
@@ -473,6 +473,67 @@ def test_ribbon_catalog_search_finds_a_button_across_tabs(fake_ribbon):
     assert hit["text"] == "Page macro"
     assert hit["tab"] == "Insert" and hit["group"] == "Macros"
     assert "tabs" not in r
+
+
+# EPLAN 2027 dropdown / split buttons carry their entries in "sub_commands".
+# A walk that only looked at the group's commands silently missed them.
+_FAKE_DROPDOWN_RIBBON = {
+    "success": True,
+    "tabs": [
+        {"tab": "Insert", "identifier": "Insert", "is_custom": False, "groups": [
+            {"group": "Macros", "is_custom": False, "commands": [
+                {"id": "500", "text": "Macros", "action_command_line": "",
+                 "is_custom": False, "is_dropdown_root": True,
+                 "sub_commands": [
+                     {"id": "35732", "text": "Page macro", "action_command_line": "",
+                      "is_custom": False},
+                     {"id": "501", "text": "Window macro", "action_command_line": "",
+                      "is_custom": False},
+                 ]},
+            ]},
+        ]},
+    ],
+}
+
+
+@pytest.fixture
+def fake_dropdown_ribbon(monkeypatch):
+    import copy
+    monkeypatch.setattr(
+        catalog, "_execute_script",
+        lambda script, timeout=30.0: {"success": True,
+                                      "results": copy.deepcopy(_FAKE_DROPDOWN_RIBBON)})
+
+
+def test_ribbon_catalog_index_counts_dropdown_entries(fake_dropdown_ribbon):
+    r = catalog.ribbon_catalog()
+    assert r["tabs"][0]["commands"] == 1
+    assert r["tabs"][0]["dropdown_entries"] == 2
+
+
+def test_ribbon_catalog_search_finds_dropdown_entries(fake_dropdown_ribbon):
+    r = catalog.ribbon_catalog(search="window")
+    assert r["count"] == 1
+    hit = r["commands"][0]
+    assert hit["text"] == "Window macro"
+    assert hit["dropdown"] == "Macros"
+    assert hit["tab"] == "Insert" and hit["group"] == "Macros"
+
+
+def test_ribbon_catalog_resolves_dropdown_entries_via_command_index(fake_dropdown_ribbon):
+    r = catalog.ribbon_catalog(tab="Insert")
+    subs = r["tabs"][0]["groups"][0]["commands"][0]["sub_commands"]
+    page_macro = [s for s in subs if s["id"] == "35732"][0]
+    assert page_macro.get("resolved_action"), page_macro
+
+
+def test_ribbon_script_reads_sub_commands_by_reflection():
+    """SubCommands is 2027-only: a static reference would not compile on 2026."""
+    script = catalog._RIBBON_SCRIPT
+    assert 'Prop(cmd, "SubCommands")' in script
+    code = "\n".join(line.split("//")[0] for line in script.splitlines())
+    assert ".SubCommands" not in code
+    assert 'results["sub_command_count"]' in script
 
 
 def test_ribbon_catalog_resolves_builtin_buttons_via_command_index(fake_ribbon):

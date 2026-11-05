@@ -651,6 +651,77 @@ using Eplan.EplApi.Scripting;
 
 public class __CLASS__
 {
+    // Read a public instance property by name, or null when absent/throwing.
+    // Walks the hierarchy DeclaredOnly so a re-declared member cannot raise
+    // AmbiguousMatchException (RibbonCommand derives from RibbonCommandBase
+    // on 2027).
+    static object Prop(object o, string name)
+    {
+        if (o == null) return null;
+        var bf = System.Reflection.BindingFlags.Public |
+                 System.Reflection.BindingFlags.Instance |
+                 System.Reflection.BindingFlags.DeclaredOnly;
+        Type cur = o.GetType();
+        while (cur != null)
+        {
+            System.Reflection.PropertyInfo pi = null;
+            try { pi = cur.GetProperty(name, bf, null, null, Type.EmptyTypes, null); } catch { pi = null; }
+            if (pi != null && pi.CanRead)
+            {
+                try { return pi.GetValue(o, null); } catch { return null; }
+            }
+            cur = cur.BaseType;
+        }
+        return null;
+    }
+
+    static string PropStr(object o, string name)
+    {
+        object v = Prop(o, name);
+        if (v == null) return null;
+        try { return Convert.ToString(v); } catch { return null; }
+    }
+
+    // RibbonCommand.SubCommands (EPLAN 2027+). Returns null when the member
+    // does not exist (older versions), an empty list for a plain button.
+    static List<Dictionary<string, object>> ReadSubCommands(object cmd, ref int withCommandLine, ref int subCommandCount)
+    {
+        object raw = Prop(cmd, "SubCommands");
+        if (raw == null) return null;
+        var list = new List<Dictionary<string, object>>();
+        var seq = raw as System.Collections.IEnumerable;
+        if (seq == null) return list;
+        foreach (object item in seq)
+        {
+            if (item == null) continue;
+            object sub = item;
+            string id = null;
+            // Tolerate both a list and a dictionary (KeyValuePair<id, cmd>).
+            object val = Prop(item, "Value");
+            object key = Prop(item, "Key");
+            if (val != null && key != null)
+            {
+                sub = val;
+                id = Convert.ToString(key);
+            }
+            var d = new Dictionary<string, object>();
+            if (id == null) id = PropStr(sub, "ID");
+            d["id"] = id == null ? "" : id;
+            string text = PropStr(sub, "Text");
+            d["text"] = text == null ? "" : text;
+            string line = PropStr(sub, "ActionCommandLine");
+            d["action_command_line"] = line == null ? "" : line;
+            if (line != null && line.Length > 0) withCommandLine++;
+            object isCustom = Prop(sub, "IsCustom");
+            if (isCustom != null) d["is_custom"] = isCustom;
+            string descr = PropStr(sub, "Description");
+            if (descr != null && descr.Length > 0) d["description"] = descr;
+            list.Add(d);
+            subCommandCount++;
+        }
+        return list;
+    }
+
     [Start]
     public void Run()
     {
@@ -660,6 +731,7 @@ public class __CLASS__
         int tabCount = 0;
         int groupCount = 0;
         int commandCount = 0;
+        int subCommandCount = 0;
         int withCommandLine = 0;
 
         try
@@ -726,6 +798,29 @@ public class __CLASS__
                                                 try { descr = cmd.Description; } catch { }
                                                 if (descr != null && descr.Length > 0) cmdDict["description"] = descr;
 
+                                                // EPLAN 2027 added dropdown / split buttons:
+                                                // their entries live in RibbonCommand.SubCommands,
+                                                // NOT in RibbonCommandGroup.Commands, so a walk of
+                                                // Commands alone silently misses them. Reached by
+                                                // reflection because the member does not exist on
+                                                // 2026 - a static reference would fail to compile
+                                                // there, and a compile error surfaces only as a
+                                                // timeout.
+                                                try
+                                                {
+                                                    var subs = ReadSubCommands(cmd, ref withCommandLine, ref subCommandCount);
+                                                    if (subs != null)
+                                                    {
+                                                        object root = Prop(cmd, "IsDropdownRoot");
+                                                        if (root != null) cmdDict["is_dropdown_root"] = root;
+                                                        if (subs.Count > 0) cmdDict["sub_commands"] = subs;
+                                                    }
+                                                }
+                                                catch (Exception exSub)
+                                                {
+                                                    errors.Add("sub-commands: " + exSub.Message);
+                                                }
+
                                                 commands.Add(cmdDict);
                                                 commandCount++;
                                             }
@@ -770,6 +865,7 @@ public class __CLASS__
         results["tab_count"] = tabCount;
         results["group_count"] = groupCount;
         results["command_count"] = commandCount;
+        results["sub_command_count"] = subCommandCount;
         results["commands_with_action_command_line"] = withCommandLine;
         results["errors"] = errors;
 
@@ -778,6 +874,14 @@ public class __CLASS__
     }
 }
 '''
+
+
+def _iter_commands(group):
+    """Every command of a ribbon group, dropdown entries (2027+) included."""
+    for cmd in group.get("commands") or []:
+        yield cmd
+        for sub in cmd.get("sub_commands") or []:
+            yield sub
 
 
 def ribbon_catalog(tab: str = None, search: str = None) -> dict:
@@ -806,12 +910,23 @@ def ribbon_catalog(tab: str = None, search: str = None) -> dict:
     action_catalog(search=...) - the registry carries the command IDs observed
     for each action, which is the same numbering as the "id" field here.
 
+    DROPDOWNS (EPLAN 2027+): every command reports "is_dropdown_root", and a
+    dropdown's entries appear in "sub_commands" (same fields as a command).
+    Searches include those entries and mark them with the "dropdown" they
+    belong to. Measured on 2027.0.3: BUILT-IN dropdowns (e.g. "Page macro",
+    which resolves to MfDropdownMenuDummyAction) report is_dropdown_root=true
+    but EPLAN returns NO sub-commands for them - only custom dropdowns added
+    through the API carry entries. So a built-in dropdown's entries are still
+    found via action_catalog(search=<entry text>), not here. Before 2027 the
+    API has neither member, so both fields are absent.
+
     The walk is defensive: a tab, group or command that throws is recorded in
     "errors" and skipped, never aborting the rest of the tree.
 
     Returns:
         dict with "tabs" (each: tab, identifier, is_custom, groups -> group,
-        is_custom, commands -> text, id, action_command_line, is_custom),
+        is_custom, commands -> text, id, action_command_line, is_custom,
+        sub_commands),
         counts, any per-node "errors", and a "note" restating the
         built-in-command limitation.
     """
@@ -849,7 +964,7 @@ def ribbon_catalog(tab: str = None, search: str = None) -> dict:
         resolved = unresolved = 0
         for _tab in out.get("tabs") or []:
             for group in _tab.get("groups") or []:
-                for cmd in group.get("commands") or []:
+                for cmd in _iter_commands(group):
                     if cmd.get("action_command_line"):
                         continue
                     hit = index.get(str(cmd.get("id")))
@@ -888,12 +1003,20 @@ def ribbon_catalog(tab: str = None, search: str = None) -> dict:
             for t in all_tabs:
                 for g in t.get("groups") or []:
                     for c in g.get("commands") or []:
-                        text = str(c.get("text") or "")
-                        if needle in text.lower():
-                            hit = dict(c)
-                            hit["tab"] = t.get("tab")
-                            hit["group"] = g.get("group")
-                            hits.append(hit)
+                        candidates = [(c, None)] + [
+                            (s, c) for s in (c.get("sub_commands") or [])]
+                        for cand, parent in candidates:
+                            text = str(cand.get("text") or "")
+                            if needle in text.lower():
+                                hit = dict(cand)
+                                hit.pop("sub_commands", None)
+                                hit["tab"] = t.get("tab")
+                                hit["group"] = g.get("group")
+                                if parent is not None:
+                                    # A dropdown entry: name the button it
+                                    # hangs off, so it can be found again.
+                                    hit["dropdown"] = parent.get("text")
+                                hits.append(hit)
             out.pop("tabs", None)
             out["view"] = "search"
             out["count"] = len(hits)
@@ -907,6 +1030,10 @@ def ribbon_catalog(tab: str = None, search: str = None) -> dict:
                 "groups": len(t.get("groups") or []),
                 "commands": sum(len(g.get("commands") or [])
                                 for g in t.get("groups") or []),
+                "dropdown_entries": sum(
+                    len(c.get("sub_commands") or [])
+                    for g in t.get("groups") or []
+                    for c in g.get("commands") or []),
             } for t in all_tabs]
             out["view"] = "index"
             out["hint"] = ("Tab index only. Pass tab=\"<name>\" for that tab's "

@@ -683,7 +683,11 @@ def live_query_pages(contains: str = None, limit: int = 100,
 
     Returns:
         dict with "pages" (list of {"name": ..., "pageType": ...}),
-        "matched", "returned".
+        "matched", "returned". On EPLAN 2027 and later each page also carries
+        "lastModifiedBy" (Page.LastModificator), and the result carries
+        "currentUser" (Project.CurrentUserName) - so you can tell who last
+        touched a page and whether that was the person running this session.
+        Both are omitted on older versions, where the members do not exist.
     """
     # limit is interpolated into the C# source outside any string literal, so
     # it must be a real integer - anything else would be code injection.
@@ -711,9 +715,18 @@ def live_query_pages(contains: str = None, limit: int = 100,
                     d["name"] = name == null ? "" : name;
                     string pt = PropText(pg, "PageType");
                     d["pageType"] = pt == null ? "" : pt;
+                    // Page.LastModificator is new in EPLAN 2027. Read it
+                    // reflectively so the same script still compiles and runs
+                    // on 2026, where the member simply does not exist.
+                    string lm = SafeText(TryRead(pg, "LastModificator", null));
+                    if (!string.IsNullOrEmpty(lm)) d["lastModifiedBy"] = lm;
                     list.Add(d);
                 }
             }
+
+            // Project.CurrentUserName is new in EPLAN 2027 as well.
+            string cu = SafeText(TryRead(project, "CurrentUserName", null));
+            if (!string.IsNullOrEmpty(cu)) results["currentUser"] = cu;
 
             results["success"] = true;
             results["matched"] = matched;
