@@ -20,7 +20,7 @@ database through MDPartsManagement like scripted.py's parts_db_* tools.
 
 import uuid
 
-from ._base import cs_escape
+from ._base import cs_escape, get_manager
 from .live import _script
 from .scripted import _execute_script
 from .schematic import _HELPERS_SCHEMATIC, _guard_prelude, _fill
@@ -28,6 +28,34 @@ from .schematic_model import cs_bool
 
 
 _RESULT_TOKEN = "{{RESULT_PATH}}"
+
+# These tools only run against this EPLAN version or later.
+MIN_EPLAN_MAJOR = 2027
+
+
+def _needs_2027(tool, fallback=None):
+    """A typed refusal when the connected EPLAN is older than 2027, else None.
+
+    Checked in Python, before any script is generated: on an older EPLAN the
+    call would only compile and run a script to report "new in 2027" (the
+    reflective check inside each script stays as the second line of defence,
+    for when the version cannot be told). Not connected -> None, so the usual
+    "not connected" answer still comes from _execute_script.
+    """
+    manager = get_manager()
+    if not getattr(manager, "connected", False):
+        return None
+    major = manager.eplan_major()
+    if major is None or major >= MIN_EPLAN_MAJOR:
+        return None
+    version = manager.server_version or manager.target_version
+    return {
+        "success": False,
+        "errorType": "EplanVersionUnsupported",
+        "error": f"eplan_{tool} needs EPLAN {MIN_EPLAN_MAJOR} or later; this server is "
+                 f"connected to EPLAN {version}. Nothing was run.",
+        "next_step": fallback or "Not available before EPLAN 2027; there is no fallback tool.",
+    }
 
 
 def _int_arg(value, name, minimum=1):
@@ -62,7 +90,7 @@ def live_read_terminal_jumpers(contains: str = None, all_levels: bool = True,
                                limit: int = 200,
                                timeout_seconds: float = 120.0) -> dict:
     """
-    List the jumpers (bridges) between terminals in the project open in EPLAN.
+    EPLAN 2027 and later only. List the jumpers (bridges) between terminals in the project open in EPLAN.
 
     Uses Terminal.GetJumpers(allLevels), which is new in EPLAN 2027. Each jumper
     is reported once, even though every terminal it touches returns it, with
@@ -90,9 +118,15 @@ def live_read_terminal_jumpers(contains: str = None, all_levels: bool = True,
         dict with "jumpers" (each: kind, type, terminals, segments ->
         [{bridged_terminal, kind}], seen_from), "terminals_matched",
         "terminals_with_jumpers", "returned", "truncated".
-        On EPLAN versions before 2027 the call fails with a message naming
-        the missing API.
+        Connected to an EPLAN older than 2027: errorType
+        EplanVersionUnsupported, with nothing run.
     """
+    refused = _needs_2027(
+        "live_read_terminal_jumpers",
+        "Before EPLAN 2027, read jumpers from a terminal diagram report "
+        "(eplan_update_reports) instead.")
+    if refused:
+        return refused
     try:
         limit = _int_arg(limit, "limit")
         contains = _text_arg(contains or "", "contains")
@@ -242,7 +276,7 @@ _PARTS_FLATTEN = '''
 def parts_db_export_edz(part_numbers: list, file_path: str,
                         include_references: bool = True) -> dict:
     """
-    Export specific parts from the parts database to an EDZ file.
+    EPLAN 2027 and later only. Export specific parts from the parts database to an EDZ file.
 
     Uses MDPartsDatabase.ExportPartsToEDZ, which is new in EPLAN 2027. Unlike
     eplan_partsmanagement_export (the whole database, or a property filter),
@@ -262,9 +296,16 @@ def parts_db_export_edz(part_numbers: list, file_path: str,
 
     Returns:
         dict with "exported_parts" ("PartNr / Variant"), "missing",
-        "file_path", "file_exists", "file_size_bytes". On EPLAN versions
-        before 2027 the call fails with a message naming the fallback tool.
+        "file_path", "file_exists", "file_size_bytes". Connected to an
+        EPLAN older than 2027: errorType EplanVersionUnsupported, nothing run,
+        and next_step names the fallback tool.
     """
+    refused = _needs_2027(
+        "parts_db_export_edz",
+        "Before EPLAN 2027, use eplan_partsmanagement_export with "
+        "format=IXPartsImportExportEdz (whole database or a property filter).")
+    if refused:
+        return refused
     if isinstance(part_numbers, str):
         part_numbers = [part_numbers]
     if not part_numbers or not isinstance(part_numbers, (list, tuple)):
@@ -399,7 +440,7 @@ _PROJECT_UDP_BODY = '''GUARD
 def remove_unused_user_properties(target: str = "project", confirm: bool = False,
                                   allow_real_project: bool = False) -> dict:
     """
-    Remove user-defined property definitions that nothing uses any more.
+    EPLAN 2027 and later only. Remove user-defined property definitions that nothing uses any more.
 
     Uses RemoveUnusedUserPropertyDefinitions(), new in EPLAN 2027, on either
     the open project or the system parts database. Over time both build up
@@ -425,6 +466,9 @@ def remove_unused_user_properties(target: str = "project", confirm: bool = False
         dict with "definitions_before" and either "definitions" (preview) or
         "definitions_after" + "removed" (after a confirmed run).
     """
+    refused = _needs_2027("remove_unused_user_properties")
+    if refused:
+        return refused
     target = (target or "").strip().lower()
     if target not in ("project", "parts_db"):
         return {"success": False,

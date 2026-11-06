@@ -391,6 +391,10 @@ class EPLANConnectionManager:
         self._clr_initialized = False
         # EPLAN.exe behind the connection, when it is local and identifiable.
         self.pid = None
+        # The connected EPLAN's own version, as server enumeration reported it
+        # (e.g. "2027.0.3"). None when the port was given or enumeration was
+        # empty; target_version (the loaded DLLs) is the fallback then.
+        self.server_version = None
         # A call abandoned while EPLAN was still running it:
         # {"thread", "action", "since"}. While its thread lives, new calls get
         # EplanBusy instead of a thread of their own, so a wedged EPLAN costs
@@ -532,12 +536,14 @@ class EPLANConnectionManager:
             # starts), fall back to EPLAN.exe's actual listening ports from
             # Windows' TCP table, then the historical default as a last resort. Each
             # candidate is tried until one answers a Ping.
+            server_version = None
             if port:
                 candidates = [str(port)]
             else:
                 servers = self.get_active_servers()
                 if servers:
                     candidates = [servers[-1]["port"]]
+                    server_version = servers[-1].get("version")
                     logger.info(f"Auto-detected port: {candidates[0]}")
                 else:
                     candidates = (eplan_listening_ports() if host in ("localhost", "127.0.0.1")
@@ -570,6 +576,7 @@ class EPLANConnectionManager:
                         # self._stuck is deliberately kept: a call abandoned
                         # on the old client may still be running in EPLAN.
                         self.pid = None
+                        self.server_version = server_version
                         if host in self.LOCAL_HOSTS:
                             try:
                                 from process_control import _listener_pid
@@ -673,6 +680,16 @@ class EPLANConnectionManager:
                                   name=f"eplan-call-{getattr(func, '__name__', 'anon')}")
         worker.start()
         return worker, box
+
+    def eplan_major(self):
+        """Major version of the EPLAN this server talks to (2027, 2026, 2 for
+        2.9), or None when it cannot be told. The connected EPLAN's own
+        version when known, else the loaded DLLs' version."""
+        for raw in (self.server_version, self.target_version):
+            m = re.match(r"\s*(\d+)", str(raw or ""))
+            if m:
+                return int(m.group(1))
+        return None
 
     def _watch_pids(self) -> set:
         """EPLAN.exe PIDs to scan for dialogs: the connected one when known and

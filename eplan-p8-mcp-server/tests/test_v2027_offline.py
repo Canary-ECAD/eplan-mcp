@@ -183,3 +183,74 @@ def test_remove_unused_project_guard_can_be_waived_explicitly(capture):
 def test_remove_unused_project_preview_needs_no_guard(capture):
     v2027.remove_unused_user_properties(target="project")
     assert "GuardScratch(project," not in capture["script"]
+
+
+# --- Only on EPLAN 2027 and later --------------------------------------------
+#
+# Checked in Python before any script is generated: on an older EPLAN the
+# tools refuse with a typed error instead of compiling a script just to learn
+# that the member is missing.
+
+
+class _FakeManager:
+    def __init__(self, connected=True, server_version=None, target_version=None):
+        self.connected = connected
+        self.server_version = server_version
+        self.target_version = target_version
+
+    from eplan_connection import EPLANConnectionManager as _M
+    eplan_major = _M.eplan_major
+
+
+def _connect_to(monkeypatch, **kw):
+    monkeypatch.setattr(v2027, "get_manager", lambda: _FakeManager(**kw))
+
+
+GATED_CALLS = [
+    (v2027.live_read_terminal_jumpers, {}),
+    (v2027.parts_db_export_edz, {"part_numbers": ["A"], "file_path": "C:/a.edz"}),
+    (v2027.remove_unused_user_properties, {"target": "parts_db", "confirm": True}),
+]
+
+
+@pytest.mark.parametrize("fn,kwargs", GATED_CALLS)
+@pytest.mark.parametrize("version", [
+    {"server_version": "2026.0.3"},
+    {"target_version": "2025"},
+    {"target_version": "2.9"},
+    # The connected EPLAN's own version wins over the loaded DLLs'.
+    {"server_version": "2026.0.1", "target_version": "2027"},
+])
+def test_an_older_eplan_is_refused_before_any_script(capture, monkeypatch, fn, kwargs, version):
+    _connect_to(monkeypatch, **version)
+    r = fn(**kwargs)
+    assert r["success"] is False
+    assert r["errorType"] == "EplanVersionUnsupported"
+    assert "Nothing was run" in r["error"]
+    assert r["next_step"]
+    assert "script" not in capture
+
+
+@pytest.mark.parametrize("fn,kwargs", GATED_CALLS)
+@pytest.mark.parametrize("version", [
+    {"server_version": "2027.0.3"},
+    {"target_version": "2027"},
+    {"target_version": "2028"},
+    {},                                   # unknown: the script's own check decides
+])
+def test_2027_and_later_or_unknown_runs(capture, monkeypatch, fn, kwargs, version):
+    _connect_to(monkeypatch, **version)
+    fn(**kwargs)
+    assert "script" in capture
+
+
+def test_not_connected_is_left_to_the_script_runner(capture, monkeypatch):
+    _connect_to(monkeypatch, connected=False, target_version="2025")
+    v2027.live_read_terminal_jumpers()
+    assert "script" in capture
+
+
+def test_the_edz_refusal_names_the_fallback(capture, monkeypatch):
+    _connect_to(monkeypatch, target_version="2026")
+    r = v2027.parts_db_export_edz(part_numbers=["A"], file_path="C:/a.edz")
+    assert "eplan_partsmanagement_export" in r["next_step"]

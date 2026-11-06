@@ -1846,6 +1846,20 @@
       }
     },
     {
+      "name": "eplan_live_read_terminal_jumpers",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
       "name": "eplan_live_remove_placement",
       "annotations": {
         "readOnlyHint": false,
@@ -2068,6 +2082,20 @@
         "changesProject": false,
         "runsCode": false,
         "changesEplan": true
+      }
+    },
+    {
+      "name": "eplan_parts_db_export_edz",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
       }
     },
     {
@@ -2412,6 +2440,20 @@
         "changesProject": true,
         "runsCode": false,
         "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_remove_unused_user_properties",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "facts": {
+        "changesProject": true,
+        "runsCode": false,
+        "changesEplan": true
       }
     },
     {
