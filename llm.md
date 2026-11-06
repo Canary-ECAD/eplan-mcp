@@ -49,7 +49,18 @@ It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   `eplan_dataportal_search_count` (read-only) and
   `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
   download is a dialog in EPLAN, so its result carries a `userAction` the model
-  must relay to the user before waiting on the import. Both are flagged
+  must relay to the user before waiting on the import. On EPLAN 2025 queuing
+  opens EPLAN's Data Portal window and the action only finishes once the user
+  closes it, so the tool runs the action from a timer after its script returns
+  and comes back within a few seconds with `status: "dataportal_window_open"`
+  and `executed: null`: the user checks the download list in that window,
+  downloads it and closes it. Do not queue the same parts again; a request made
+  while that window is open is refused (`errorType: "DataPortalWindowOpen"`)
+  without reaching EPLAN, and the next call reports the earlier verdict in
+  `earlierResults`. While the window is open EPLAN takes no other commands
+  (`eplan_ping` still answers): those calls return `EplanBlockedByDialog`, whose
+  `next_step` says to have the user finish in that window, not to click it.
+  Both are flagged
   `network` (`openWorldHint: true`): they reach the Data Portal.
   Includes 3 tools that work **only on EPLAN 2027 and later**, built on API
   members new in 2027: `eplan_live_read_terminal_jumpers` (terminal
