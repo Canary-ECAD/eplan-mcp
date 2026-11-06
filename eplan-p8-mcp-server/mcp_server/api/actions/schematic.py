@@ -77,6 +77,8 @@ import re
 import time
 import uuid
 
+from eplan_connection import TYPED_FAILURES
+
 from ._base import cs_escape
 from . import _project_cache
 from .live import _script
@@ -524,6 +526,10 @@ def _shape(raw, timeout_hint=None):
     """
     if not isinstance(raw, dict):
         return {"success": False, "error": "Unexpected result: %r" % (raw,)}
+    if raw.get("errorType") in TYPED_FAILURES:
+        # Blocked by a dialog, timed out or busy: keep errorType, next_step
+        # and dialogs - flattening them to "error" loses the way out.
+        return dict(raw)
     if not raw.get("success"):
         msg = raw.get("message") or raw.get("error") or "script did not run"
         out = {"success": False, "error": msg}

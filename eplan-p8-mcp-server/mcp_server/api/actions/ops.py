@@ -24,22 +24,17 @@ and writes a JSON result. Every op addresses objects by `ref`, which is a
 session handle ("124/17/1201/0"), a device tag ("=+CE-K1"), or "$label" for the
 object an earlier op in the same batch created.
 
-REGISTERED, NOT RECOMPILED - FOR READS. The same C# declares an EPLAN action
-([DeclareAction]) named after a hash of its own source. The first read of a
-session registers it with RegisterScript; later reads call the action with
-two file paths and skip the compile. If EPLAN was restarted, or the action
-does not answer (no ".started" marker within a few seconds), the request
-falls back to a one-shot ExecuteScript of the same source, which also
-surfaces compile errors through scripted._execute_script.
-EPLAN_MCP_OPS_MODE=script forces the one-shot path for everything.
+ONE-SHOT, ALWAYS. Every batch is compiled and run once through
+ExecuteScript (scripted._execute_script), which also surfaces compile errors.
 
-Writes always take the one-shot path. Measured on 2026.0.3: inside the
-registered action every write lock fails with
-LockingExceptionFailedLockAttempt - Function.Create, and LockObject itself -
-while the identical source run through ExecuteScript succeeds; the action
-runs outside the context that owns the project's locks. The compile it
-saves is small anyway: a read answered in 0.3 s registered and 0.5 s as a
-one-shot, so the cost of a batch is its work, not its compile.
+The Engapplic fork this comes from also registered the interpreter as an
+EPLAN action ([DeclareAction] + RegisterScript) so that reads could skip the
+compile. That path is gone on purpose: a registration is persistent state in
+EPLAN that was never unregistered, its name changed with every change to the
+source (so registrations piled up), and it saved about 0.2 s per read
+(measured there on 2026.0.3: 0.3 s registered, 0.5 s one-shot). Writes could
+not use it anyway - inside the registered action every write lock failed
+with LockingExceptionFailedLockAttempt.
 
 MEASURED ON EPLAN 2026.0.3 (the facts the ops encode):
 - Function.Create(Page, SymbolVariant, PointD, PointD) throws
@@ -58,11 +53,9 @@ MEASURED ON EPLAN 2026.0.3 (the facts the ops encode):
   its two corners (top-left, bottom-right) plus RECTANGLE_WIDTH/HEIGHT.
 """
 
-import hashlib
 import json
 import os
 import re
-import time
 import uuid
 
 from ._base import cs_escape, _get_connected_manager
@@ -83,13 +76,9 @@ __all__ = [
     "live_check_page",
 ]
 
-# Directory for the registered interpreter script and the per-batch request
-# files; results go to scripted.RESULTS_DIR like every other script's.
+# Directory for the per-batch request files; results go to
+# scripted.RESULTS_DIR like every other script's.
 OPS_DIR = os.path.join(scripted._MCP_ROOT, "scripts", "ops")
-
-# How long to wait for the registered action to acknowledge a request before
-# deciding it is not registered (EPLAN restarted, registration refused).
-STARTED_TIMEOUT_S = 4.0
 
 # PLC connection point roles -> FunctionDefinition (group, id) in category
 # PLCTerminal. Measured on the Siemens S7-1200 Data Portal macro.
@@ -100,10 +89,6 @@ PLC_POINT_KINDS = {
 }
 
 _HANDLE_RE = re.compile(r"^\d+/\d+/\d+/\d+$")
-
-# Hashes of interpreter sources this process has registered in EPLAN, keyed by
-# the EPLAN connection generation they were registered under.
-_registered = set()
 
 
 _HEADER = '''using System;
@@ -801,13 +786,9 @@ _OPS_HELPERS = r'''
     }
 
     // ---- the run -----------------------------------------------------------
-    static void RunOps(string opsPath, string resultPath, bool acknowledge)
+    static void RunOps(string opsPath, string resultPath)
     {
         if (string.IsNullOrEmpty(opsPath) || string.IsNullOrEmpty(resultPath)) return;
-        // The marker tells the caller the registered action is alive before
-        // the work is done; a one-shot script has ExecuteScript's own
-        // synchronous return for that and leaves no marker behind.
-        if (acknowledge) { try { File.WriteAllText(resultPath + ".started", "1"); } catch { } }
         Dictionary<string, object> results = new Dictionary<string, object>();
         Type lsType = null;
         object lockStep = null;
@@ -905,13 +886,7 @@ _OPS_HELPERS = r'''
     [Start]
     public void Run()
     {
-        RunOps(@"{{OPS_PATH}}", @"{{RESULT_PATH}}", false);
-    }
-
-    [DeclareAction("ACTIONNAME")]
-    public void McpOps(string ops, string result)
-    {
-        RunOps(ops, result, true);
+        RunOps(@"{{OPS_PATH}}", @"{{RESULT_PATH}}");
     }
 }
 '''
@@ -926,43 +901,13 @@ def _static_helpers():
     return live._HELPERS.split(live._START_MARKER)[0]
 
 
-def _interpreter_source(class_name, action_name):
+def _interpreter_source(class_name):
+    # {{TARGET_PROJECT}} is substituted here exactly as live._script does it:
+    # the schematic helpers test its length to decide whether to take an
+    # explicit lock, and left unsubstituted the literal token is never empty.
     return (_HEADER + class_name + _static_helpers() + live._PROJECT_HELPER
-            + schematic._HELPERS_SCHEMATIC + _OPS_HELPERS.replace("ACTIONNAME", action_name))
-
-
-def _source_hash():
-    """Identifies the interpreter version: a changed op never hits a stale registration."""
-    return hashlib.sha1(_interpreter_source("X", "X").encode("utf-8")).hexdigest()[:10]
-
-
-def _action_name():
-    return "McpOps_" + _source_hash()
-
-
-def _ops_mode():
-    return (os.environ.get("EPLAN_MCP_OPS_MODE") or "registered").strip().lower()
-
-
-def _wait_for(path, timeout):
-    start = time.time()
-    while not os.path.exists(path):
-        if time.time() - start > timeout:
-            return False
-        time.sleep(0.05)
-    return True
-
-
-def _read_result(result_path):
-    for attempt in range(10):
-        if attempt:
-            time.sleep(0.05)
-        try:
-            with open(result_path, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except (json.JSONDecodeError, ValueError):
-            if attempt == 9:
-                raise
+            + schematic._HELPERS_SCHEMATIC + _OPS_HELPERS).replace(
+                "{{TARGET_PROJECT}}", cs_escape(target.get()))
 
 
 def _cleanup(*paths):
@@ -972,38 +917,6 @@ def _cleanup(*paths):
                 os.remove(p)
         except OSError:
             pass
-
-
-def _run_registered(manager, request_path, result_path, timeout):
-    """
-    Run the request through the registered action. Returns the raw result
-    dict, or None when the action did not answer (not registered, EPLAN
-    restarted) so the caller falls back to a one-shot script.
-    """
-    name = _action_name()
-    script_path = os.path.join(OPS_DIR, name + ".cs")
-    if not os.path.exists(script_path):
-        with open(script_path, "w", encoding="utf-8") as fh:
-            fh.write(_interpreter_source(name, name).replace("{{OPS_PATH}}", "").replace("{{RESULT_PATH}}", ""))
-
-    started = result_path + ".started"
-    for attempt in (1, 2):
-        if name not in _registered:
-            reg = manager.execute_action('RegisterScript /ScriptFile:"%s"' % script_path, quiet_mode=False)
-            if not reg.get("success"):
-                return None
-            _registered.add(name)
-        run = manager.execute_action('%s /ops:"%s" /result:"%s"' % (name, request_path, result_path),
-                                     quiet_mode=False)
-        if run.get("success") and _wait_for(started, STARTED_TIMEOUT_S):
-            if not _wait_for(result_path, timeout):
-                return {"success": False, "errorType": "McpOpsTimeout",
-                        "error": "The batch started but wrote no result within %gs." % timeout}
-            return _read_result(result_path)
-        # No acknowledgement: the registration is stale (EPLAN restarted) or
-        # was refused. Re-register once, then give up on this path.
-        _registered.discard(name)
-    return None
 
 
 def run_ops(page, ops, read_back=False, stop_on_error=True, allow_real_project=False,
@@ -1017,7 +930,7 @@ def run_ops(page, ops, read_back=False, stop_on_error=True, allow_real_project=F
     """
     if read_back and types is None:
         types = list(_READBACK_TYPES)
-    manager, error = _get_connected_manager()
+    _manager, error = _get_connected_manager()
     if error:
         return error
     scripted._ensure_dirs()
@@ -1025,7 +938,6 @@ def run_ops(page, ops, read_back=False, stop_on_error=True, allow_real_project=F
 
     exec_id = uuid.uuid4().hex[:8]
     request_path = os.path.join(OPS_DIR, "ops_%s.json" % exec_id)
-    result_path = os.path.join(scripted.RESULTS_DIR, "ops_%s.json" % exec_id)
     request = {
         "project": target.get(),
         "page": page,
@@ -1042,33 +954,15 @@ def run_ops(page, ops, read_back=False, stop_on_error=True, allow_real_project=F
     with open(request_path, "w", encoding="utf-8") as fh:
         json.dump(request, fh, ensure_ascii=False)
 
-    raw = None
-    engine = "script"
     try:
-        # Reads only. Inside the registered action every write lock fails
-        # (LockingExceptionFailedLockAttempt, even LockObject itself) while
-        # the identical C# run by ExecuteScript succeeds - the action runs
-        # outside the context that owns the project's locks. Measured on
-        # 2026.0.3 the one-shot costs about 0.2 s more, so writes take it.
-        if _ops_mode() != "script" and not write:
-            raw = _run_registered(manager, request_path, result_path, timeout_seconds)
-            if raw is not None:
-                engine = "registered"
-        if raw is None:
-            class_name = "McpOps_" + exec_id
-            script = (_interpreter_source(class_name, "McpOpsOneShot_" + exec_id)
-                      .replace("{{OPS_PATH}}", request_path.replace("\\", "\\\\")))
-            raw = scripted._execute_script(script, timeout=timeout_seconds)
+        script = (_interpreter_source("McpOps_" + exec_id)
+                  .replace("{{OPS_PATH}}", request_path.replace("\\", "\\\\")))
+        raw = scripted._execute_script(script, timeout=timeout_seconds)
     finally:
-        _cleanup(request_path, result_path + ".started")
+        _cleanup(request_path)
 
-    if engine == "registered" and isinstance(raw, dict) and raw.get("errorType") != "McpOpsTimeout":
-        # The registered action hands back the script's own result dict; put
-        # it in the envelope _execute_script would have used, so _shape sees
-        # one shape from both engines.
-        raw = {"success": True, "results": raw}
     out = schematic._shape(raw)
-    out["engine"] = engine
+    out["engine"] = "script"
     if out.get("success"):
         out["success"] = bool(out.get("allOk"))
         if out.get("page_after"):
@@ -1362,7 +1256,7 @@ def live_batch(page: str, operations: list, read_back: bool = False,
         timeout_seconds: For the whole batch. Default 300.
 
     Returns:
-        {"success" (every op succeeded), "engine" ("registered" or "script"),
+        {"success" (every op succeeded), "engine" (always "script"),
          "ops": [per-op result with "success", "handle" when it made one,
          "error" when it failed], "labels": {label: handle}, "failed",
          "stoppedAt"?, "page_after"?, "overlaps"?}

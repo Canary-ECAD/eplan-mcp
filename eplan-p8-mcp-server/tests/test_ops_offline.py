@@ -20,42 +20,23 @@ def _no_target():
 
 
 class FakeManager:
-    """Stands in for the connection manager on the registered path."""
+    """Stands in for the connection manager; records any direct action."""
 
-    def __init__(self, acknowledge=True, register_ok=True):
+    def __init__(self):
         self.calls = []
-        self.acknowledge = acknowledge
-        self.register_ok = register_ok
 
     def execute_action(self, action, quiet_mode=False):
         self.calls.append(action)
-        if action.startswith("RegisterScript"):
-            return {"success": self.register_ok}
-        if action.startswith("McpOps_"):
-            if self.acknowledge:
-                # The action writes its ".started" marker, then the result.
-                result = action.split('/result:"')[1].rstrip('"')
-                open(result + ".started", "w").close()
-                with open(result, "w", encoding="utf-8") as fh:
-                    json.dump({"success": True, "project": "P", "page": "=+CE/0",
-                               "ops": [{"index": 0, "op": "find", "success": True,
-                                        "matched": 0, "items": []}],
-                               "labels": {}, "failed": 0, "allOk": True}, fh)
-            return {"success": True}
         return {"success": True}
-
-
-@pytest.fixture
-def fast_wait(monkeypatch):
-    monkeypatch.setattr(ops, "STARTED_TIMEOUT_S", 0.2)
 
 
 @pytest.fixture
 def one_shot(monkeypatch, tmp_path):
     """Force the one-shot engine and capture the script it would run."""
     captured = {}
-    monkeypatch.setenv("EPLAN_MCP_OPS_MODE", "script")
-    monkeypatch.setattr(ops, "_get_connected_manager", lambda: (FakeManager(), None))
+    manager = FakeManager()
+    captured["manager"] = manager
+    monkeypatch.setattr(ops, "_get_connected_manager", lambda: (manager, None))
     monkeypatch.setattr(ops, "OPS_DIR", str(tmp_path / "ops"))
     monkeypatch.setattr(scripted, "RESULTS_DIR", str(tmp_path / "results"))
     monkeypatch.setattr(scripted, "SCRIPT_DIR", str(tmp_path / "generated"))
@@ -81,7 +62,7 @@ def one_shot(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_interpreter_has_the_traps_covered():
-    cs = ops._interpreter_source("McpOps_t", "McpOps_t")
+    cs = ops._interpreter_source("McpOps_t")
     for line in cs.splitlines():
         if line.strip().startswith("using "):
             assert "Eplan.EplApi.DataModel" not in line
@@ -89,17 +70,20 @@ def test_interpreter_has_the_traps_covered():
     assert "?." not in cs                      # C# 5 floor
     assert "LockingStep" in cs and 'GetMethod("Dispose")' in cs
     assert "ResolveProject(" in cs and "GuardScratch(" in cs
-    assert '[DeclareAction("McpOps_t")]' in cs
+    assert "[DeclareAction" not in cs, "nothing may be registered in EPLAN"
     assert "[Start]" in cs
     for op in ("place", "rect", "macro", "update", "move", "remove", "dimension", "line", "text", "find", "read"):
         assert 'case "%s":' % op in cs
 
 
-def test_action_name_follows_the_source():
-    """A changed op must never hit a stale registration."""
-    a = ops._action_name()
-    assert a.startswith("McpOps_") and len(a) == len("McpOps_") + 10
-    assert a == ops._action_name()
+def test_the_target_project_token_is_substituted():
+    """Left as the literal token, "{{TARGET_PROJECT}}".Length > 0 is always true."""
+    cs = ops._interpreter_source("McpOps_t")
+    assert "{{TARGET_PROJECT}}" not in cs
+    assert '"".Length > 0' in cs, "no target pinned: no explicit lock"
+    path = r"C:\scratch\P.elk"
+    target.set_target(path)
+    assert '"%s".Length > 0' % _base.cs_escape(path) in ops._interpreter_source("McpOps_t")
 
 
 # ---------------------------------------------------------------------------
@@ -176,74 +160,18 @@ def test_find_is_a_read_and_needs_no_scratch_guard(one_shot):
 
 
 # ---------------------------------------------------------------------------
-# Registered engine
+# No registered action
 # ---------------------------------------------------------------------------
 
-def test_registered_path_registers_once_then_calls_the_action(monkeypatch, tmp_path, fast_wait):
-    mgr = FakeManager()
-    monkeypatch.delenv("EPLAN_MCP_OPS_MODE", raising=False)
-    monkeypatch.setattr(ops, "_get_connected_manager", lambda: (mgr, None))
-    monkeypatch.setattr(ops, "OPS_DIR", str(tmp_path / "ops"))
-    monkeypatch.setattr(scripted, "RESULTS_DIR", str(tmp_path / "results"))
-    monkeypatch.setattr(scripted, "SCRIPT_DIR", str(tmp_path / "generated"))
-    monkeypatch.setattr(ops, "_registered", set())
-    monkeypatch.setattr(scripted, "_execute_script", lambda *a, **k: pytest.fail("one-shot must not run"))
-
-    out = ops.live_find_placements("=+CE/0")
-    assert out["success"] and out["engine"] == "registered"
-    out = ops.live_find_placements("=+CE/0")
-    assert out["engine"] == "registered"
-    registers = [c for c in mgr.calls if c.startswith("RegisterScript")]
-    runs = [c for c in mgr.calls if c.startswith("McpOps_")]
-    assert len(registers) == 1 and len(runs) == 2
-    assert os.path.exists(os.path.join(ops.OPS_DIR, ops._action_name() + ".cs"))
-    assert '/ops:"' in runs[0] and '/result:"' in runs[0]
-
-
-def test_writes_never_use_the_registered_action(monkeypatch, tmp_path, fast_wait):
-    """Inside the action every write lock fails (measured), so writes compile a one-shot."""
-    mgr = FakeManager()
-    monkeypatch.delenv("EPLAN_MCP_OPS_MODE", raising=False)
-    monkeypatch.setattr(ops, "_get_connected_manager", lambda: (mgr, None))
-    monkeypatch.setattr(ops, "OPS_DIR", str(tmp_path / "ops"))
-    monkeypatch.setattr(scripted, "RESULTS_DIR", str(tmp_path / "results"))
-    monkeypatch.setattr(scripted, "SCRIPT_DIR", str(tmp_path / "generated"))
-    monkeypatch.setattr(ops, "_registered", set())
-    ran = {}
-
-    def fake_execute(script, timeout=30.0):
-        ran["script"] = script
-        return {"success": True, "results": {"success": True, "ops": [{"index": 0, "op": "rect", "success": True, "handle": "1/1/1/0"}],
-                                             "labels": {}, "failed": 0, "allOk": True}}
-
-    monkeypatch.setattr(scripted, "_execute_script", fake_execute)
-    out = ops.live_batch("=+CE/0", [{"op": "rect", "x": 0, "y": 0, "width": 1, "height": 1, "tag": "-Z"}])
-    assert out["success"] and out["engine"] == "script"
-    assert mgr.calls == [] and "LockObject" in ran["script"]
-
-
-def test_registered_path_falls_back_when_the_action_does_not_answer(monkeypatch, tmp_path, fast_wait):
-    mgr = FakeManager(acknowledge=False)
-    monkeypatch.delenv("EPLAN_MCP_OPS_MODE", raising=False)
-    monkeypatch.setattr(ops, "_get_connected_manager", lambda: (mgr, None))
-    monkeypatch.setattr(ops, "OPS_DIR", str(tmp_path / "ops"))
-    monkeypatch.setattr(scripted, "RESULTS_DIR", str(tmp_path / "results"))
-    monkeypatch.setattr(scripted, "SCRIPT_DIR", str(tmp_path / "generated"))
-    monkeypatch.setattr(ops, "_registered", set())
-    ran = {}
-
-    def fake_execute(script, timeout=30.0):
-        ran["script"] = script
-        return {"success": True, "results": {"success": True, "ops": [{"index": 0, "op": "find", "success": True, "items": []}],
-                                             "labels": {}, "failed": 0, "allOk": True}}
-
-    monkeypatch.setattr(scripted, "_execute_script", fake_execute)
-    out = ops.live_find_placements("=+CE/0")
-    assert out["success"] and out["engine"] == "script"
-    # Registered twice (stale registration re-tried once), then the one-shot ran.
-    assert sum(1 for c in mgr.calls if c.startswith("RegisterScript")) == 2
-    assert "[Start]" in ran["script"]
-    assert ops._action_name() not in ops._registered
+@pytest.mark.parametrize("call", [
+    lambda: ops.live_find_placements("=+CE/0"),
+    lambda: ops.live_batch("=+CE/0", [{"op": "rect", "x": 0, "y": 0, "width": 1, "height": 1, "tag": "-Z"}]),
+])
+def test_reads_and_writes_run_one_shot_and_register_nothing(one_shot, call):
+    out = call()
+    assert out["engine"] == "script"
+    assert "[Start]" in one_shot["script"]
+    assert one_shot["manager"].calls == [], "no RegisterScript, no direct action"
 
 
 # ---------------------------------------------------------------------------
@@ -352,3 +280,16 @@ def test_duplicate_labels_same_wire_only():
     assert found[0]["gap_mm"] == 5.0
     # A label without text is nothing to compare.
     assert ops._duplicate_labels([lab("1", 0, 0, des=""), lab("2", 0, 2, des="")]) == []
+
+
+def test_a_batch_blocked_by_a_dialog_keeps_the_typed_failure(one_shot, monkeypatch):
+    """schematic._shape used to flatten it to a bare "error", losing next_step."""
+    blocked = {"success": False, "errorType": "EplanBlockedByDialog",
+               "error": "EPLAN stopped at dialog 'X'", "message": "EPLAN stopped at dialog 'X'",
+               "next_step": "eplan_click_dialog_button(...)", "timed_out": True,
+               "dialogs": [{"hwnd": 1, "title": "X"}]}
+    monkeypatch.setattr(scripted, "_execute_script", lambda script, timeout=30.0: dict(blocked))
+    out = ops.live_find_placements("=+CE/0")
+    assert out["success"] is False
+    assert out["errorType"] == "EplanBlockedByDialog"
+    assert out["next_step"] and out["dialogs"]

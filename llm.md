@@ -39,12 +39,12 @@ Use one of these whenever you are unsure of an exact action name or parameter �
 
 ## 2. The local `eplan` action server
 
-It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
+It exposes **248 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
 
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,
   `eplan_disconnect`, `eplan_list_extensions`.
-- **205 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
+- **229 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
   Includes 2 Data Portal tools that use EPLAN's own Data Portal sign-in:
   `eplan_dataportal_search_count` (read-only) and
   `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
@@ -76,29 +76,23 @@ It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   `ProjectManager.OpenProjects` and action wrappers fill an omitted
   `PROJECTNAME` with it, so the user clicking another project in EPLAN cannot
   redirect a write; set it right after opening the project) and 10 batched
-  page-operation tools built on ONE C# interpreter that runs a list of ops per
-  script and is registered as an EPLAN action for the session so later
-  batches skip the compile: `eplan_live_batch` (ops: place, rect, macro, update, move, remove, dimension, line, text - a free page text, bilingual with "es_ES@..;en_US@..;" -, find, read) (place / rect / macro / update /
-  move / remove / dimension / line / find / read, objects addressed by handle,
-  by device tag, or by `$label` of an earlier op), `eplan_live_find_placements`
-  (by tag - handles do not survive an EPLAN restart, tags do),
-  `eplan_live_place_device` (place + tag + part + properties + function
-  definition in one go; terminals and PLC points fall back to the 2-arg
-  Create automatically), `eplan_live_insert_macro` (a window macro by
-  insertion point or top-left corner, devices tagged), `eplan_live_place_panel_item`
-  (the part's 2D macro, or EPLAN's rectangle fallback), `eplan_live_place_plc_point`
-  (DI/DO/PS/CPS with the right FunctionDefinition), `eplan_live_place_terminal`,
+  page-operation tools built on ONE C# interpreter that runs a list of ops in
+  one script: `eplan_live_batch` (ops: place, rect, macro, update, move,
+  remove, dimension, line, text - a free page text, bilingual with
+  "es_ES@..;en_US@..;" -, find, read; objects addressed by handle, by device
+  tag, or by `$label` of an earlier op), `eplan_live_find_placements` (by tag -
+  handles do not survive an EPLAN restart, tags do), `eplan_live_place_device`
+  (place + tag + part + properties + function definition in one go; terminals
+  and PLC points fall back to the 2-arg Create automatically),
+  `eplan_live_insert_macro` (a window macro by insertion point or top-left
+  corner, devices tagged), `eplan_live_place_panel_item` (the part's 2D macro,
+  or EPLAN's rectangle fallback), `eplan_live_place_plc_point` (DI/DO/PS/CPS
+  with the right FunctionDefinition), `eplan_live_place_terminal`,
   `eplan_live_update_placement` (tag/part/properties on an existing object; a
   duplicate tag is refused unless allowed), `eplan_live_render_page` (export
   the page to PNG to look at it) and `eplan_live_check_page` (page check +
-  itemized messages + overlapping device outlines, in one call).
   itemized messages + overlapping outlines/texts + duplicate wire labels, in
-  one call).
-  Includes 2 Data Portal tools that use EPLAN's own Data Portal sign-in:
-  `eplan_dataportal_search_count` (read-only) and
-  `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
-  download is a dialog in EPLAN, so its result carries a `userAction` the model
-  must relay to the user before waiting on the import.
+  one call). Every write is scratch-only unless `allow_real_project=True`.
   Includes 5 discovery tools (`eplan_settings_list_children`,
   `eplan_list_schemes`, `eplan_list_report_templates`, `eplan_list_layers`,
   `eplan_list_enums`) that enumerate real EPLAN catalogs instead of guessing,
