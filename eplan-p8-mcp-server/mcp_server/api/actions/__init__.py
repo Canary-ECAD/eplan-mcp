@@ -344,6 +344,14 @@ from .live import (
     live_read_check_messages,
 )
 
+# Built on API members new in EPLAN 2027 (reached by reflection, so older
+# versions get a clear "new in 2027" error instead of a compile timeout).
+from .v2027 import (
+    live_read_terminal_jumpers,
+    parts_db_export_edz,
+    remove_unused_user_properties,
+)
+
 # Schematic authoring - the WRITE side of the live object model: create pages,
 # place devices at coordinates, wire them, read the result back. Rides the same
 # reflection scaffold as live.py. Writes are scratch-only unless the caller
@@ -512,6 +520,9 @@ __all__ = [
     'live_verify_page', 'live_set_device_tag', 'live_read_connections',
     'live_connect_pins_routed', 'live_routing_catalog', 'live_place_connection_symbol',
     'live_place_corner', 'live_place_tnode', 'live_place_connected',
+    # New in EPLAN 2027
+    'live_read_terminal_jumpers', 'parts_db_export_edz',
+    'remove_unused_user_properties',
     # GED interaction
     'start_ged_interaction', 'insert_device', 'insert_symbol_reference',
     'select_device',

@@ -39,18 +39,27 @@ Use one of these whenever you are unsure of an exact action name or parameter �
 
 ## 2. The local `eplan` action server
 
-It exposes **221 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
+It exposes **224 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
 
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,
   `eplan_disconnect`, `eplan_list_extensions`.
-- **202 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
+- **205 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
   Includes 2 Data Portal tools that use EPLAN's own Data Portal sign-in:
   `eplan_dataportal_search_count` (read-only) and
   `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
   download is a dialog in EPLAN, so its result carries a `userAction` the model
   must relay to the user before waiting on the import. Both are flagged
   `network` (`openWorldHint: true`): they reach the Data Portal.
+  Includes 3 tools that work **only on EPLAN 2027 and later**, built on API
+  members new in 2027: `eplan_live_read_terminal_jumpers` (terminal
+  jumpers/bridges via `Terminal.GetJumpers`), `eplan_parts_db_export_edz`
+  (export named parts, with their referenced data, to an EDZ file) and
+  `eplan_remove_unused_user_properties` (preview, then remove unused
+  user-defined property definitions from the project or the parts database;
+  removing needs `confirm=True`, plus `allow_real_project=True` outside the
+  scratch root for a project). Connected to an older EPLAN they return
+  `errorType: EplanVersionUnsupported` at once, without running anything.
   Includes 5 discovery tools (`eplan_settings_list_children`,
   `eplan_list_schemes`, `eplan_list_report_templates`, `eplan_list_layers`,
   `eplan_list_enums`) that enumerate real EPLAN catalogs instead of guessing,
