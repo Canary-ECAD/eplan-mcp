@@ -93,6 +93,14 @@ claude mcp list   # "eplan"이 보여야 합니다
 이 저장소의 docstring으로 생성한 도구별 레퍼런스는
 [covaga.dev/docs/tools](https://covaga.dev/ko/docs/tools/project-and-workspace-management/)에 있습니다.
 
+#### 도구 주석
+
+각 도구는 자신이 하는 일을 밝혀, 클라이언트가 언제 사용자에게 먼저 물어볼지 정할 수 있게 합니다. 네 가지
+표준 MCP 주석(`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`)과 함께, `_meta`의 `canary-ecad/eplan` 키 아래에 EPLAN 사실 `changesProject`, `runsCode`, `changesEplan`, `projectArgument`(열린 프로젝트
+변경, 코드 실행, EPLAN 자체 변경, 프로젝트를 지정하는 인수)를 담습니다. 이는 정책이 아니라 사실입니다. 표는
+[`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py)에 있고 [`tools.json`](eplan-p8-mcp-server/tools.json)가 공개 사본입니다. 각 릴리스(태그 `vX.Y.Z`)에는 `tools.json`이 첨부되며 추가, 제거,
+재주석된 도구가 나열됩니다.
+
 #### Discovery 모드
 
 `EPLAN_MCP_MODE=discovery`는 199개 대신 13개의 도구만 제공하여, 토큰을 많이 쓰는 도구 목록을

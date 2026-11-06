@@ -89,6 +89,13 @@ claude mcp list   # 应列出 "eplan"
 根据本仓库 docstring 生成的逐个工具参考位于
 [covaga.dev/docs/tools](https://covaga.dev/zh-cn/docs/tools/project-and-workspace-management/)。
 
+#### 工具注解
+
+每个工具都会说明自己做什么，以便客户端决定何时先询问用户：它带有四个标准 MCP 注解（`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`），
+并在 `_meta` 的 `canary-ecad/eplan` 键下给出 EPLAN 事实 `changesProject`, `runsCode`, `changesEplan`, `projectArgument`（是否写入当前项目、是否运行代码、
+是否修改 EPLAN 本身、哪个参数指定项目）。这些是事实而非策略：表格位于 [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py)，[`tools.json`](eplan-p8-mcp-server/tools.json) 是公开副本。
+每个版本（标签 `vX.Y.Z`）都会附上 `tools.json`，并列出新增、删除或重新注解的工具。
+
 #### Discovery 模式
 
 `EPLAN_MCP_MODE=discovery` 只发布 13 个工具而非 199 个，用每个任务多一次搜索往返，换取更省

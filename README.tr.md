@@ -96,6 +96,15 @@ yapı taşlarını da kapsar:
 Bu deponun docstring'lerinden üretilen araç araç başvuru kaynağı
 [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/) adresindedir.
 
+#### Araç açıklamaları
+
+Her araç ne yaptığını söyler; böylece istemci kullanıcıya ne zaman önce soracağına karar
+verebilir. Dört standart MCP açıklamasını (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) ve `_meta` içinde `canary-ecad/eplan`
+anahtarı altında EPLAN olgularını `changesProject`, `runsCode`, `changesEplan`, `projectArgument` taşır (açık projeyi değiştirir, kod çalıştırır,
+EPLAN'ın kendisini değiştirir, projeyi adlandıran argüman). Bunlar politika değil olgudur:
+tablo [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py) dosyasındadır, [`tools.json`](eplan-p8-mcp-server/tools.json) yayımlanan kopyadır. Her sürüm (`vX.Y.Z` etiketi)
+`tools.json` dosyasını ekler ve eklenen, kaldırılan ya da yeniden açıklanan araçları listeler.
+
 #### Discovery modu
 
 `EPLAN_MCP_MODE=discovery`, 199 yerine 13 araç yayınlar; çok token tüketen bir araç listesini,

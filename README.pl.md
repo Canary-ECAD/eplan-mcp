@@ -96,6 +96,15 @@ tworzenie → wdrożenie → test:
 Opis narzędzie po narzędziu, generowany z docstringów tego repozytorium, znajduje się na
 [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/).
 
+#### Adnotacje narzędzi
+
+Każde narzędzie mówi, co robi, aby klient mógł zdecydować, kiedy najpierw zapytać
+użytkownika: ma cztery standardowe adnotacje MCP (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), a w swoim `_meta` pod kluczem
+`canary-ecad/eplan` fakty EPLAN `changesProject`, `runsCode`, `changesEplan`, `projectArgument` (zmienia otwarty projekt, uruchamia kod, zmienia sam
+EPLAN, argument wskazujący projekt). To fakty, nie zasady: tabela jest w [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py), a [`tools.json`](eplan-p8-mcp-server/tools.json) to
+opublikowana kopia. Każde wydanie (tag `vX.Y.Z`) dołącza `tools.json` i wymienia narzędzia
+dodane, usunięte lub z nowymi adnotacjami.
+
 #### Tryb discovery
 
 `EPLAN_MCP_MODE=discovery` publikuje 13 narzędzi zamiast 199, zamieniając kosztowną w tokenach

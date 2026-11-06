@@ -97,6 +97,15 @@ claude mcp list   # в списке должен быть "eplan"
 Справочник по каждому инструменту, сгенерированный из docstring этого репозитория, находится на
 [covaga.dev/docs/tools](https://covaga.dev/ru/docs/tools/project-and-workspace-management/).
 
+#### Аннотации инструментов
+
+Каждый инструмент сообщает, что он делает, чтобы клиент мог решить, когда сначала спросить
+пользователя: у него есть четыре стандартные аннотации MCP (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), а в `_meta` под ключом
+`canary-ecad/eplan` — факты EPLAN `changesProject`, `runsCode`, `changesEplan`, `projectArgument` (изменяет открытый проект, выполняет код, изменяет
+сам EPLAN, аргумент с именем проекта). Это факты, а не политика: таблица находится в [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py),
+а [`tools.json`](eplan-p8-mcp-server/tools.json) — опубликованная копия. Каждый релиз (тег `vX.Y.Z`) прикладывает `tools.json` и
+перечисляет добавленные, удалённые и переаннотированные инструменты.
+
 #### Режим discovery
 
 `EPLAN_MCP_MODE=discovery` публикует 13 инструментов вместо 199, меняя затратный по токенам
