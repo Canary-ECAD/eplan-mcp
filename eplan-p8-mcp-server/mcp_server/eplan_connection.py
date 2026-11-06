@@ -154,6 +154,13 @@ DIALOG_CHECK_S = 2.0
 # abandoned, not failed: EPLAN may still finish it, so its result is unknown.
 TYPED_FAILURES = ("EplanBlockedByDialog", "EplanActionTimeout", "EplanBusy")
 
+# Windows a tool knows it made EPLAN open, with what to do about them:
+# (hwnd, title) -> next_step. A call blocked by such a window gets that
+# instruction instead of the generic "which button?". Set and cleared by the
+# tool that opened the window (dataportal.py, for EPLAN 2025's Data Portal
+# window); the title is part of the key because Windows reuses hwnds.
+WINDOW_HINTS = {}
+
 
 def _env_seconds(name, default):
     """A positive number of seconds from the environment, else `default`.
@@ -689,6 +696,9 @@ class EPLANConnectionManager:
     @staticmethod
     def _dialog_next_step(dialog: dict) -> str:
         title = dialog.get("title", "")
+        hint = WINDOW_HINTS.get((dialog.get("hwnd"), title))
+        if hint:
+            return hint
         button = dialog.get("suggested_button")
         then = ("then check the state (for example eplan_get_current_project): "
                 "the interrupted call's result is unknown.")

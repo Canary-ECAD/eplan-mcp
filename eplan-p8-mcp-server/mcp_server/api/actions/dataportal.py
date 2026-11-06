@@ -51,6 +51,14 @@ then waits up to QUEUE_WAIT_S for that file:
 
 While that window is still open, a new queue request is refused without
 calling EPLAN, with the same instruction: EPLAN would only hold it too.
+
+Measured on 2025.0.3 with this design: the tool returned in 3.6 s; the window
+is a #32770 dialog titled "EDP" that disables EPLAN's main window; eplan_ping
+still answered, while any other EPLAN call came back EplanBlockedByDialog
+after about 4 s. So the window is registered in eplan_connection.WINDOW_HINTS,
+and those calls tell the caller to have the user finish in the window instead
+of asking which button to press. After the user closed it, the action wrote
+executed=true and EPLAN answered normally again.
 """
 
 import json
@@ -223,6 +231,48 @@ def _remove(*paths):
             pass
 
 
+def _window_hints():
+    from eplan_connection import WINDOW_HINTS
+    return WINDOW_HINTS
+
+
+def _hint_for(parts: list) -> str:
+    """What a call blocked by the Data Portal window should do (eplan_connection.WINDOW_HINTS)."""
+    return ("This is EPLAN's Data Portal window, opened by eplan_dataportal_add_to_download_list; "
+            "EPLAN takes no commands until it is closed. Do not click its buttons: ask the user to "
+            "check its download list for " + ", ".join(parts) + ", download it and close the window. "
+            "Then retry this call: its result is unknown.")
+
+
+def _forget(done: str):
+    """Drop a pending request, its files and its window hint."""
+    entry = _pending.pop(done, None) or {}
+    window = entry.get("window")
+    if window:
+        _window_hints().pop((window["hwnd"], window["title"]), None)
+    _remove(done, done + ".started")
+
+
+def _sweep_stale(max_age_s: float = 86400.0):
+    """Remove result files a stopped server left behind (an action that reported
+    back after the process that waited for it had gone)."""
+    try:
+        names = os.listdir(RESULTS_DIR)
+    except OSError:
+        return
+    now = time.time()
+    for name in names:
+        path = os.path.join(RESULTS_DIR, name)
+        base = path[:-len(".started")] if name.endswith(".started") else path
+        if not name.startswith("dataportal_") or base in _pending:
+            continue
+        try:
+            if now - os.path.getmtime(path) > max_age_s:
+                os.remove(path)
+        except OSError:
+            pass
+
+
 def _collect_finished() -> list:
     """The verdicts of earlier queue requests whose action has reported back since."""
     finished = []
@@ -230,8 +280,7 @@ def _collect_finished() -> list:
         res = _read_json(done)
         if res is None:
             continue
-        _remove(done, done + ".started")
-        del _pending[done]
+        _forget(done)
         item = {"parts": entry["parts"], "success": res.get("success"), "executed": res.get("executed")}
         if res.get("error"):
             item["error"] = res["error"]
@@ -244,16 +293,23 @@ def _still_open(pids):
     pending = [e for e in _pending.values() if e.get("window")]
     if not pending:
         return None
-    hwnds = {w.get("hwnd") for w in _windows(pids)}
+    open_now = {(w.get("hwnd"), w.get("title", "")) for w in _windows(pids)}
+    found = None
     for entry in pending:
-        if entry["window"]["hwnd"] in hwnds:
-            return entry["window"], entry["parts"]
-    return None
+        window = entry["window"]
+        if (window["hwnd"], window["title"]) in open_now:
+            found = found or (window, entry["parts"])
+        else:
+            # Closed: its hint must not follow a reused hwnd. The request stays
+            # pending until its action reports back.
+            _window_hints().pop((window["hwnd"], window["title"]), None)
+    return found
 
 
 def _queue(params: dict, parts: list) -> dict:
     """Run the queue action so that a window it opens cannot hold the call."""
     os.makedirs(RESULTS_DIR, exist_ok=True)
+    _sweep_stale()
     done = os.path.join(RESULTS_DIR, f"dataportal_{uuid.uuid4().hex[:12]}.json")
     pids = _eplan_pids()
     before = _top_hwnds(pids)
@@ -272,8 +328,7 @@ def _queue(params: dict, parts: list) -> dict:
     while True:
         finished = _read_json(done)
         if finished is not None:
-            _remove(done, done + ".started")
-            del _pending[done]
+            _forget(done)
             return finished
         now = time.monotonic()
         if now >= next_check:
@@ -285,6 +340,7 @@ def _queue(params: dict, parts: list) -> dict:
                 w = confirmed[0]
                 window = {"hwnd": w["hwnd"], "title": w.get("title", "")}
                 _pending[done]["window"] = window
+                _window_hints()[(window["hwnd"], window["title"])] = _hint_for(parts)
                 return {"success": True, "executed": None, "status": "dataportal_window_open",
                         "dataportal_window": window,
                         "eplanWaitsOnWindow": bool(w.get("main_disabled") or w.get("owner_disabled"))}

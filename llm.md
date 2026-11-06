@@ -57,7 +57,10 @@ It exposes **221 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   downloads it and closes it. Do not queue the same parts again; a request made
   while that window is open is refused (`errorType: "DataPortalWindowOpen"`)
   without reaching EPLAN, and the next call reports the earlier verdict in
-  `earlierResults`. Both are flagged
+  `earlierResults`. While the window is open EPLAN takes no other commands
+  (`eplan_ping` still answers): those calls return `EplanBlockedByDialog`, whose
+  `next_step` says to have the user finish in that window, not to click it.
+  Both are flagged
   `network` (`openWorldHint: true`): they reach the Data Portal.
   Includes 5 discovery tools (`eplan_settings_list_children`,
   `eplan_list_schemes`, `eplan_list_report_templates`, `eplan_list_layers`,

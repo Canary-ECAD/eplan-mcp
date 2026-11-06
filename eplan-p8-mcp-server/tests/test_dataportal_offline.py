@@ -13,11 +13,13 @@ script, and a written "done" file for the action reporting back.
 """
 
 import json
+import os
 import re
 import time
 
 import pytest
 
+import eplan_connection
 from api.actions import dataportal
 
 PART = {"part_number": "DEMO.CT-100", "dataportal_id": "11"}
@@ -39,6 +41,7 @@ def _report(script, result):
 def isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(dataportal, "RESULTS_DIR", str(tmp_path))
     monkeypatch.setattr(dataportal, "_pending", {})
+    monkeypatch.setattr(eplan_connection, "WINDOW_HINTS", {})
     monkeypatch.setattr(dataportal, "QUEUE_WAIT_S", 2.0)
     monkeypatch.setattr(dataportal, "QUEUE_WINDOW_CHECK_S", 0.01)
     monkeypatch.setattr(dataportal, "_eplan_pids", lambda: {42})
@@ -190,6 +193,36 @@ def test_the_next_call_reports_the_earlier_verdict(monkeypatch, eplan_2025, isol
     assert result["status"] == "done"
     assert result["earlierResults"] == [{"parts": ["DEMO.CT-100"], "success": True, "executed": True}]
     assert dataportal._pending == {}
+
+
+def test_a_call_blocked_by_the_dataportal_window_says_what_to_do(eplan_2025, isolated):
+    dataportal.dataportal_add_to_download_list([PART])
+    step = eplan_connection.EPLANConnectionManager._dialog_next_step(
+        {"hwnd": 501, "title": "EDP", "suggested_button": None})
+    assert "Data Portal window" in step
+    assert "DEMO.CT-100" in step
+    assert "Do not click" in step
+    # Another window with the same hwnd (reused) gets the generic step.
+    other = eplan_connection.EPLANConnectionManager._dialog_next_step(
+        {"hwnd": 501, "title": "Something else", "suggested_button": None})
+    assert "Data Portal" not in other
+    # Once the window is gone the hint goes too.
+    isolated.clear()
+    dataportal._still_open({42})
+    assert eplan_connection.WINDOW_HINTS == {}
+
+
+def test_result_files_left_by_a_stopped_server_are_swept(eplan, tmp_path):
+    old, fresh = tmp_path / "dataportal_old.json", tmp_path / "dataportal_new.json"
+    other = tmp_path / "result_keep.json"
+    for f in (old, fresh, other):
+        f.write_text("{}")
+    a_week_ago = time.time() - 7 * 86400
+    os.utime(old, (a_week_ago, a_week_ago))
+    os.utime(other, (a_week_ago, a_week_ago))
+    dataportal.dataportal_add_to_download_list([PART])
+    assert not old.exists()
+    assert fresh.exists() and other.exists()
 
 
 def test_a_window_that_was_already_open_is_not_taken_for_the_dataportal(monkeypatch, isolated):
