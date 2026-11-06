@@ -96,6 +96,16 @@ unbeaufsichtigten Schleife Entwickeln → Bereitstellen → Testen ab:
 Eine Referenz Tool für Tool, erzeugt aus den Docstrings dieses Repositorys, gibt es unter
 [covaga.dev/docs/tools](https://covaga.dev/de/docs/tools/project-and-workspace-management/).
 
+#### Tool-Annotationen
+
+Jedes Tool sagt, was es tut, damit ein Client entscheiden kann, wann er den Benutzer vorher
+fragt: Es trägt die vier MCP-Standardannotationen (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) und in seinem `_meta` unter dem
+Schlüssel `canary-ecad/eplan` die EPLAN-Fakten `changesProject`, `runsCode`, `changesEplan`, `projectArgument` (schreibt das offene Projekt, führt
+Code aus, ändert EPLAN selbst, Argument mit dem Projektnamen). Es sind Fakten, keine
+Richtlinien: Die Tabelle liegt in [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py), [`tools.json`](eplan-p8-mcp-server/tools.json) ist die veröffentlichte Kopie. Jedes Release
+(Tag `vX.Y.Z`) hängt `tools.json` an und listet hinzugefügte, entfernte und neu annotierte
+Tools.
+
 #### Discovery-Modus
 
 `EPLAN_MCP_MODE=discovery` veröffentlicht 13 statt 199 Tools und tauscht damit eine

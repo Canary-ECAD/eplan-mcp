@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.join(SCRIPT_DIR, "api"))
 import api.actions as eplan_actions
 from api.actions import _project_cache
 from tool_registry import ToolRegistry, make_meta_tools, META_TOOL_NAMES
+from tool_annotations import TOOL_FLAGS, annotate
 
 
 # ============================================================================
@@ -103,6 +104,18 @@ def _json_wrapper(f):
 
     mcp_tool_wrapper.__doc__ = f.__doc__ or ""
     return mcp_tool_wrapper
+
+
+def _publish(app, tool_name, func, source=None, table=None):
+    """
+    Register `func` as the MCP tool `tool_name`, with its annotations and EPLAN
+    facts from tool_annotations.py (`source` is the undecorated function, read
+    for the project argument). A tool the table doesn't know is published
+    without them.
+    """
+    annotations, meta = annotate(tool_name, source or func, table)
+    extra = {"annotations": annotations, "meta": meta} if annotations else {}
+    app.tool(name=tool_name, **extra)(func)
 
 
 # ============================================================================
@@ -337,7 +350,7 @@ def _register_core(app, registry, mode):
         if published:
             # Registered raw (not through _json_wrapper): these already return
             # a JSON string, exactly as they did when they were decorated.
-            app.tool(name=tool_name)(func)
+            _publish(app, tool_name, func)
 
 
 # ============================================================================
@@ -357,6 +370,11 @@ def register_actions(actions_module, prefix="eplan_", app=None, registry=None, m
     registry = registry if registry is not None else globals().get("REGISTRY")
     mode = mode if mode is not None else MODE
 
+    # An extension module may state its own tools' facts (see tool_annotations.py).
+    own_flags = getattr(actions_module, "TOOL_FLAGS", None)
+    table = ({f"{prefix}{name}": flags for name, flags in own_flags.items()}
+             if isinstance(own_flags, dict) else None)
+
     for func_name in actions_module.__all__:
         if func_name.startswith('_'):
             continue
@@ -375,7 +393,7 @@ def register_actions(actions_module, prefix="eplan_", app=None, registry=None, m
                          published=published)
 
         if published and app is not None:
-            app.tool(name=tool_name)(_json_wrapper(func))
+            _publish(app, tool_name, _json_wrapper(func), source=func, table=table)
 
 
 # ============================================================================
@@ -486,7 +504,7 @@ def build_app(mode="full", app=None, registry=None):
         for attr, func in meta.items():
             tool_name = "eplan_" + attr
             registry.add(tool_name, meta_ns, attr, prefix="eplan_", published=True)
-            app.tool(name=tool_name)(_json_wrapper(func))
+            _publish(app, tool_name, _json_wrapper(func), source=func)
 
     strip_schema_boilerplate(app)
 

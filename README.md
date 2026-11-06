@@ -96,6 +96,26 @@ develop → deploy → test loop:
 A tool-by-tool reference, generated from this repository's docstrings, lives at
 [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/).
 
+#### Tool annotations
+
+Every tool says what it does, so a client can decide when to ask the user first. Each one
+carries the four standard MCP annotations (`readOnlyHint`, `destructiveHint`,
+`idempotentHint`, `openWorldHint`), always set, plus EPLAN facts in its `_meta` under the
+key `canary-ecad/eplan`:
+
+| Fact | Meaning |
+|---|---|
+| `changesProject` | Writes the open project (a client may back it up first) |
+| `runsCode` | Runs scripts, actions or add-ins it is given |
+| `changesEplan` | Changes EPLAN itself: settings, parts database, master data, ribbon, add-ins |
+| `projectArgument` | The argument that names the project, when the tool has one |
+
+They are facts, not policy: the table lives in
+[`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py), and
+[`tools.json`](eplan-p8-mcp-server/tools.json) is the published copy. Each release (a tag
+`vX.Y.Z`) attaches `tools.json` and lists the tools added, removed or re-annotated since the
+previous one.
+
 #### Discovery mode
 
 `EPLAN_MCP_MODE=discovery` publishes 13 tools instead of 199, trading a token-heavy tool
@@ -238,6 +258,11 @@ Add the function to the imports **and** to `__all__` in
 `eplan-p8-mcp-server/mcp_server/api/actions/__init__.py`. It is then auto-registered as
 `eplan_open_project`.
 
+Then say what it does: add a line to `TOOL_FLAGS` in
+`eplan-p8-mcp-server/mcp_server/tool_annotations.py` (see [Tool annotations](#tool-annotations))
+and run `python eplan-p8-mcp-server/tools/dump_tools.py` to update `tools.json`. The test
+suite fails until both are done.
+
 ### 3. Restart the MCP server
 
 The new tool becomes available once Claude / the server restarts.
@@ -291,6 +316,8 @@ def run_smoke_test(project_path: str) -> dict:
 Rules and behaviour:
 
 - `TOOL_PREFIX` namespaces the tools (`acme_run_smoke_test` above).
+- `TOOL_FLAGS = {"run_smoke_test": "project"}` (optional) gives the tools their
+  [annotations](#tool-annotations); without it they have none.
 - Extensions may import everything the built-in actions use: `actions`, `actions._base`,
   `actions.scripted._execute_script` (run C# inside EPLAN), `eplan_connection`.
 - A broken extension is reported on stderr and skipped; it never prevents the server from

@@ -268,6 +268,9 @@ All of these exist as `eplan_*` tools:
   `api/actions/<module>.py`, export it in that package's
   `__init__.py` `__all__`, restart. It auto-registers as `eplan_<name>`. The
   docstring + type hints become the tool description and schema you will see.
+  Then state what it does with one line in `TOOL_FLAGS`
+  (`mcp_server/tool_annotations.py`, see §7) and regenerate `tools.json` with
+  `python tools/dump_tools.py`; the test suite fails until both are done.
 - **EPLAN settings at runtime:** via `eplan_set_setting` /
   `eplan_set_project_setting` (action params `set`/`value`/`index`) or the
   typed `eplan_settings_set_*` scripted tools.
@@ -306,3 +309,30 @@ with unsaved changes, renumbering (devices/pages/cables/terminals/connections),
 restore/backup overwrites, settings changes, `set_*_property`, raw actions, and
 custom C# scripts. Read-only actions (status, search, get current project,
 exports to new files, parts DB queries) are safe to run as needed.
+
+### Tool annotations
+
+You don't have to guess which is which: every tool states it. Each carries the
+four standard MCP annotations, always set explicitly (`readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint`; the last is always false,
+since nothing talks to anything but the local EPLAN), and EPLAN facts in its
+`_meta` under the key `canary-ecad/eplan`:
+
+| Fact | Meaning |
+|---|---|
+| `changesProject` | Writes the open project; back it up before the first such call |
+| `runsCode` | Runs scripts, actions or add-ins it is given; what it does depends on its input |
+| `changesEplan` | Changes EPLAN itself: settings, parts database, master data, ribbon, workspace, add-ins |
+| `projectArgument` | Present when the tool has an argument naming the project (`project_name`, `project_path` or `project`) |
+
+A tool with `readOnlyHint: true` changes nothing. Treat `destructiveHint`,
+`runsCode` or `changesEplan` as "confirm every time". The facts are written by
+hand in `mcp_server/tool_annotations.py` (`TOOL_FLAGS`, one line per tool);
+`eplan-p8-mcp-server/tools.json` is the published copy, attached to each
+release (`vX.Y.Z` tags) together with the tools added, removed or re-annotated
+since the previous one. Extension modules may give their tools facts with a
+`TOOL_FLAGS = {"function_name": "flags"}` dict; without it they carry no
+annotations, which means "may change anything".
+
+These are facts, not policy: a client such as Bochica decides from them when to
+ask, and may ask more often than they suggest.

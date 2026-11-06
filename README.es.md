@@ -98,6 +98,15 @@ desarrollar → desplegar → probar totalmente desatendido:
 La referencia herramienta por herramienta, generada a partir de los docstrings de este
 repositorio, está en [covaga.dev/docs/tools](https://covaga.dev/es/docs/tools/project-and-workspace-management/).
 
+#### Anotaciones de las herramientas
+
+Cada herramienta dice lo que hace, para que el cliente decida cuándo preguntar antes al
+usuario: lleva las cuatro anotaciones estándar de MCP (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) y, en su `_meta` bajo la
+clave `canary-ecad/eplan`, los hechos de EPLAN `changesProject`, `runsCode`, `changesEplan`, `projectArgument` (escribe en el proyecto abierto,
+ejecuta código, cambia EPLAN, argumento que nombra el proyecto). Son hechos, no política: la
+tabla está en [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py) y [`tools.json`](eplan-p8-mcp-server/tools.json) es la copia publicada. Cada versión (etiqueta `vX.Y.Z`)
+adjunta `tools.json` y lista las herramientas añadidas, quitadas o reanotadas.
+
 #### Modo discovery
 
 `EPLAN_MCP_MODE=discovery` publica 13 herramientas en lugar de 199: cambia una lista de
