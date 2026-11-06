@@ -288,6 +288,20 @@
       }
     },
     {
+      "name": "eplan_click_dialog_button",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": true
+      }
+    },
+    {
       "name": "eplan_close_pages",
       "annotations": {
         "readOnlyHint": true,
@@ -1533,6 +1547,20 @@
       },
       "facts": {
         "changesProject": true,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_list_dialogs",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "facts": {
+        "changesProject": false,
         "runsCode": false,
         "changesEplan": false
       }

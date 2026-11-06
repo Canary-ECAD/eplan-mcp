@@ -381,6 +381,12 @@ from .catalog import (
     ribbon_catalog,
 )
 
+# Dialogs - read and answer EPLAN's windows from Windows, even while it is blocked
+from .dialogs import (
+    list_dialogs,
+    click_dialog_button,
+)
+
 # Re-export base utilities for advanced usage
 from ._base import (
     _get_connected_manager,
@@ -505,6 +511,8 @@ __all__ = [
     'update_detail_engineering',
     # Action catalog
     'action_catalog', 'action_describe', 'action_run', 'ribbon_catalog',
+    # Dialogs
+    'list_dialogs', 'click_dialog_button',
     # Base
     '_get_connected_manager', '_build_action',
 ]

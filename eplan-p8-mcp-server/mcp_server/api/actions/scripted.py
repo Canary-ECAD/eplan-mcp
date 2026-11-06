@@ -33,6 +33,7 @@ import hashlib
 from typing import List
 from ._base import _get_connected_manager, cs_escape
 from cs_json import prepare_script
+from eplan_connection import TYPED_FAILURES
 
 # A value used as a C# member/identifier (not inside a string literal) cannot
 # be escaped safely - it must be a real identifier. Reject anything else to
@@ -384,6 +385,10 @@ def _execute_script(script_content: str, timeout: float = 30.0) -> dict:
         exec_result = manager.execute_action(
             f'ExecuteScript /ScriptFile:"{script_path}"'
         )
+        if exec_result.get("errorType") in TYPED_FAILURES:
+            # Blocked by a dialog, timed out or busy: the script may have
+            # started, so say exactly that instead of "failed to execute".
+            return dict(exec_result)
         if not exec_result.get("success"):
             return {
                 "success": False,

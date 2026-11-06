@@ -104,7 +104,7 @@ def test_discovery_mode_publishes_only_core_and_meta(discovery_app, server):
     app, _ = discovery_app
     expected = set(server.DISCOVERY_CORE_TOOLS) | set(server.DISCOVERY_META_TOOLS)
     assert _names(app) == expected
-    assert len(expected) == 13
+    assert len(expected) == 15
 
 
 def test_discovery_mode_hides_a_known_wrapper(discovery_app):

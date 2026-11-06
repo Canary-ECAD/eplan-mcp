@@ -20,6 +20,7 @@ import os
 import sys
 import types
 import functools
+import anyio
 from mcp.server.fastmcp import FastMCP
 from eplan_connection import get_manager, detect_installed_versions
 
@@ -54,6 +55,9 @@ DISCOVERY_CORE_TOOLS = frozenset({
     "eplan_connect",
     "eplan_disconnect",
     "eplan_ping",
+    # The way out when EPLAN is blocked by a prompt; must not need a lookup.
+    "eplan_list_dialogs",
+    "eplan_click_dialog_button",
     "eplan_action_catalog",
     "eplan_action_describe",
     "eplan_action_run",
@@ -91,6 +95,23 @@ def _is_published(tool_name, mode):
     return tool_name in DISCOVERY_CORE_TOOLS or tool_name in DISCOVERY_META_TOOLS
 
 
+def _threaded(f):
+    """Publish a blocking tool as an async one that runs on a worker thread.
+
+    FastMCP calls a plain function on its event loop, so one call stuck in
+    EPLAN (a modal dialog) froze the whole server: not even eplan_list_dialogs,
+    whose whole job is to explain the hang, could answer. EPLAN itself still
+    gets one call at a time (EPLANConnectionManager._exec_lock).
+    """
+
+    @functools.wraps(f)
+    async def threaded_tool(*args, **kwargs):
+        return await anyio.to_thread.run_sync(functools.partial(f, *args, **kwargs))
+
+    threaded_tool.__doc__ = f.__doc__ or ""
+    return threaded_tool
+
+
 def _json_wrapper(f):
     """Wrap an action function so the MCP tool returns formatted JSON."""
 
@@ -103,7 +124,7 @@ def _json_wrapper(f):
             return json.dumps({"success": False, "error": str(e)}, indent=2)
 
     mcp_tool_wrapper.__doc__ = f.__doc__ or ""
-    return mcp_tool_wrapper
+    return _threaded(mcp_tool_wrapper)
 
 
 def _publish(app, tool_name, func, source=None, table=None):
@@ -350,7 +371,7 @@ def _register_core(app, registry, mode):
         if published:
             # Registered raw (not through _json_wrapper): these already return
             # a JSON string, exactly as they did when they were decorated.
-            _publish(app, tool_name, func)
+            _publish(app, tool_name, _threaded(func), source=func)
 
 
 # ============================================================================
@@ -598,21 +619,24 @@ mcp, REGISTRY, _loaded_extensions = build_app(MODE)
 # ============================================================================
 
 if __name__ == "__main__":
+    # stdout is the MCP stdio channel: anything printed there that is not
+    # JSON-RPC can break the client. Status goes to stderr.
+    _log = functools.partial(print, file=sys.stderr)
     installed = detect_installed_versions()
-    print("EPLAN MCP Server")
+    _log("EPLAN MCP Server")
     if installed:
         versions = ", ".join(i["full_version"] for i in installed)
-        print(f"Installed EPLAN versions: {versions} (auto-targets the newest)")
+        _log(f"Installed EPLAN versions: {versions} (auto-targets the newest)")
     else:
-        print("WARNING: no EPLAN installation detected")
-    print("-" * 40)
-    print(f"Mode: {MODE} ({len(REGISTRY.published_names())} of {len(REGISTRY)} "
+        _log("WARNING: no EPLAN installation detected")
+    _log("-" * 40)
+    _log(f"Mode: {MODE} ({len(REGISTRY.published_names())} of {len(REGISTRY)} "
           f"tools published)")
     if MODE == "discovery":
-        print("Hidden tools are reachable via eplan_tools_search / "
+        _log("Hidden tools are reachable via eplan_tools_search / "
               "eplan_tools_describe / eplan_tools_call")
-    print("All actions run as eplan_* (C# script under QuietMode)")
-    print("-" * 40)
+    _log("All actions run as eplan_* (C# script under QuietMode)")
+    _log("-" * 40)
 
     # Transport selection: stdio (default) or streamable-http for running the
     # server on the EPLAN machine and connecting from another machine
@@ -632,7 +656,7 @@ if __name__ == "__main__":
             sys.exit(f"MCP_PORT must be an integer in 1..65535, got {raw_port!r}")
         mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
         mcp.settings.port = port
-        print(f"Transport: streamable-http on {mcp.settings.host}:{mcp.settings.port}")
+        _log(f"Transport: streamable-http on {mcp.settings.host}:{mcp.settings.port}")
         mcp.run(transport="streamable-http")
     elif transport in _STDIO_TRANSPORTS:
         mcp.run()
