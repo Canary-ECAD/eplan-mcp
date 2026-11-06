@@ -79,8 +79,16 @@ def test_read_tools_change_nothing(tools):
             assert not any(facts[k] for k in FACTS), tool.name
 
 
-def test_no_tool_talks_to_the_outside_world(tools):
-    assert [t.name for t in tools if t.annotations.openWorldHint] == []
+def test_only_the_data_portal_tools_talk_to_the_outside_world(tools):
+    # They reach the Data Portal through EPLAN's own sign-in; everything else is local.
+    # In discovery mode eplan_tools_call can run them, so it carries the flag too.
+    names = {t.name for t in tools}
+    expected = (
+        ["eplan_tools_call"]
+        if "eplan_tools_call" in names
+        else ["eplan_dataportal_add_to_download_list", "eplan_dataportal_search_count"]
+    )
+    assert sorted(t.name for t in tools if t.annotations.openWorldHint) == expected
 
 
 @pytest.mark.parametrize("flags", ["read project", "read destructive", "write", "read code"])
