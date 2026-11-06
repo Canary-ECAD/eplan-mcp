@@ -29,11 +29,13 @@ Flags, separated by spaces:
     eplan        changesEplan
     destructive  may delete or overwrite work, or is hard to undo
     idempotent   calling it twice with the same arguments does nothing more
+    network      reaches a service outside this machine through EPLAN (the
+                 Data Portal, with EPLAN's own sign-in): openWorldHint
 
 An empty string means: changes something outside the open project (writes an
 export, a backup or a print) or opens, closes or checks it, without deleting
-anything. No tool talks to anything but the local EPLAN, so openWorldHint is
-always false.
+anything. Only tools flagged network talk to anything but the local EPLAN;
+for every other tool openWorldHint is false.
 
 Extension modules (EPLAN_MCP_EXTENSIONS) may declare their own table as
 TOOL_FLAGS = {"function_name": "flags"}; their tools have no annotations
@@ -48,7 +50,7 @@ __all__ = ["META_KEY", "TOOL_FLAGS", "FLAGS", "annotate", "parse_flags"]
 
 META_KEY = "canary-ecad/eplan"
 
-FLAGS = frozenset({"read", "project", "code", "eplan", "destructive", "idempotent"})
+FLAGS = frozenset({"read", "project", "code", "eplan", "destructive", "idempotent", "network"})
 
 # Arguments that name the project a call acts on, in the order they are looked
 # for. The first one a tool has is its projectArgument.
@@ -91,7 +93,7 @@ def annotate(tool_name, func=None, table=None):
         readOnlyHint=read,
         destructiveHint="destructive" in words,
         idempotentHint=read or "idempotent" in words,
-        openWorldHint=False,
+        openWorldHint="network" in words,
     )
     facts = {
         "changesProject": "project" in words,
@@ -138,6 +140,8 @@ TOOL_FLAGS = {
     "eplan_create_installation_space":             "project",
     "eplan_create_labels":                         "project",
     "eplan_create_model_views":                    "project",
+    "eplan_dataportal_add_to_download_list":       "network idempotent",
+    "eplan_dataportal_search_count":               "read network",
     "eplan_dc_export":                             "idempotent",
     "eplan_dc_import":                             "project",
     "eplan_delete_device_list":                    "project destructive",
@@ -327,6 +331,6 @@ TOOL_FLAGS = {
     # any other tool by name, so it carries the facts of the worst one.
     "eplan_tools_search":                          "read",
     "eplan_tools_describe":                        "read",
-    "eplan_tools_call":                            "project code eplan destructive",
+    "eplan_tools_call":                            "project code eplan destructive network",
 }
 # fmt: on

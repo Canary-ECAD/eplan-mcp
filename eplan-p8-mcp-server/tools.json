@@ -461,6 +461,34 @@
       }
     },
     {
+      "name": "eplan_dataportal_add_to_download_list",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_dataportal_search_count",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
       "name": "eplan_dc_export",
       "annotations": {
         "readOnlyHint": false,
