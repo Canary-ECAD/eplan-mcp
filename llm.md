@@ -39,7 +39,7 @@ Use one of these whenever you are unsure of an exact action name or parameter â€
 
 ## 2. The local `eplan` action server
 
-It exposes **219 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
+It exposes **221 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
 
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,
