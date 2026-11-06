@@ -39,7 +39,7 @@ Use one of these whenever you are unsure of an exact action name or parameter �
 
 ## 2. The local `eplan` action server
 
-It exposes **219 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
+It exposes **221 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
 
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,
@@ -152,6 +152,20 @@ Tools return JSON. Actions typically return:
 `success: false` with a `message`/`error` means the EPLAN action itself failed —
 read the message; it usually points at a bad parameter or a missing precondition
 (e.g. no project open).
+
+**A call that did not complete** carries one of three `errorType`s and a
+`next_step` to follow:
+
+- `EplanBlockedByDialog` — EPLAN stopped at a prompt (it is in `dialogs`).
+- `EplanActionTimeout` — no answer within `EPLAN_MCP_ACTION_TIMEOUT` (600 s).
+- `EplanBusy` — an earlier abandoned call is still running, so this one was not sent.
+
+In all three the result is **unknown**: EPLAN may still finish the call. Do not
+retry blindly. `eplan_list_dialogs` reads EPLAN's windows from Windows (it works
+while EPLAN is blocked), and `eplan_click_dialog_button` answers one — by
+default only OK, Cancel, Close, No or Skip, in any language. Show the user the
+dialog's text when the answer is theirs to give, then check the state (e.g.
+`eplan_get_current_project`) before carrying on.
 
 `success: true` from a directly-executed utility (`ExecuteScript`) only means
 EPLAN accepted the call. Generated scripts are one-shot `[Start]`-only classes

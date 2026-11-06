@@ -12,6 +12,7 @@ import os
 import logging
 import re
 import json
+import threading
 import time
 import uuid
 from typing import Optional, List
@@ -138,6 +139,45 @@ MESSAGE_SCAN_CAP = 500
 # monkeypatching its sleep/time affects pytest itself.
 SCRIPT_RESULT_TIMEOUT_S = 30.0
 
+# Upper bound on one ExecuteAction call. Unlike the wait above, this one does
+# bound a hang: a modal dialog or a wedged EPLAN otherwise blocks the call, and
+# the server with it, forever. Generous because full-project exports are slow.
+# Override with EPLAN_MCP_ACTION_TIMEOUT (seconds).
+DEFAULT_ACTION_TIMEOUT_S = 600.0
+
+# How often a running call is checked for a blocking dialog. A dialog has to
+# be seen on two checks in a row, so one that flashes up and closes does not
+# end the call.
+DIALOG_CHECK_S = 2.0
+
+# errorType values for an EPLAN call that did not complete. The call was
+# abandoned, not failed: EPLAN may still finish it, so its result is unknown.
+TYPED_FAILURES = ("EplanBlockedByDialog", "EplanActionTimeout", "EplanBusy")
+
+
+def _env_seconds(name, default):
+    """A positive number of seconds from the environment, else `default`.
+
+    A typo in a client config must never stop the server from starting, so a
+    bad value is logged (to stderr) and ignored rather than raised.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw)
+        if value > 0:
+            return value
+    except ValueError:
+        pass
+    logger.warning(f"{name}={raw!r} is not a positive number of seconds; using {default}")
+    return default
+
+
+def action_timeout_s() -> float:
+    """EPLAN_MCP_ACTION_TIMEOUT, read per call so it can change at runtime."""
+    return _env_seconds("EPLAN_MCP_ACTION_TIMEOUT", DEFAULT_ACTION_TIMEOUT_S)
+
 # The action-result contract, declared rather than implied.
 #
 # Written because not having it cost real money three times in one session: a
@@ -171,6 +211,13 @@ RESULT_FIELDS = (
     ("eplanMessagesLevels", "only when something outranks Message", "Per-entry severity, parallel to eplanMessages."),
     ("eplanMessagesUnbounded", "only when the slice could not be bounded", "True when no end bookmark could be taken, so entries from outside this action may be included and the total is an upper bound."),
     ("eplanMessagesFromContextOnly", "only when the context knew more", "How many messages came from ActionCallingContext.SysMessages but not the bookmark slice. Its presence is the evidence that would justify switching channels."),
+
+    # --- calls that did not complete (errorType in TYPED_FAILURES)
+    ("next_step", "on EplanBlockedByDialog, EplanActionTimeout and EplanBusy", "One concrete tool call or instruction that moves the caller forward."),
+    ("timed_out", "on EplanBlockedByDialog and EplanActionTimeout", "True: the call was abandoned while EPLAN was still running it, so its result is unknown and its side effects may or may not have happened."),
+    ("dialogs", "only when a blocking window was seen", "The blocking windows, in the shape eplan_list_dialogs returns."),
+    ("in_flight_action", "on EplanBusy", "The earlier call EPLAN is still busy with."),
+    ("eplan_state", "on EplanActionTimeout and EplanBusy", "'not_responding' when Windows flags EPLAN's main window Not Responding (frozen, or a heavy computation that may still finish), 'responding', or 'unknown'."),
 )
 
 # Fields the generated C# emits for the Python side to consume. They are
@@ -196,7 +243,10 @@ RESULT_FIELD_NAMES = tuple(name for name, _, _ in RESULT_FIELDS)
 # field to the contract cannot forget the trace. "action" and "success" are
 # excluded because _log_action writes them itself; "parameters" because the
 # trace records intent, not the full echo.
-_NOT_LOGGED = ("success", "action", "parameters")
+#
+# next_step and dialogs stay out too: errorType and error already carry the
+# cause into the trace, and dialogs can be large.
+_NOT_LOGGED = ("success", "action", "parameters", "next_step", "dialogs")
 LOGGED_RESULT_KEYS = tuple(n for n in RESULT_FIELD_NAMES if n not in _NOT_LOGGED)
 
 
@@ -247,6 +297,34 @@ def eplan_listening_ports(only_pids=None, pids=None) -> list:
         pass
     return ports
 
+
+# Thin wrappers over ui_windows, so tests can replace them and so a missing or
+# failing ui_windows (off Windows) degrades to "nothing seen". Never raise.
+
+def _top_hwnds(pids) -> set:
+    try:
+        import ui_windows
+        return ui_windows.top_hwnds(pids)
+    except Exception:
+        return set()
+
+
+def _list_windows(pids, new_since=None) -> list:
+    try:
+        import ui_windows
+        return ui_windows.list_windows(pids, new_since=new_since)
+    except Exception:
+        return []
+
+
+def eplan_state(pids) -> str:
+    """'responding', 'not_responding' (Windows' Not Responding flag) or 'unknown'."""
+    try:
+        import ui_windows
+        r = ui_windows.responding(pids) if pids else None
+    except Exception:
+        r = None
+    return "unknown" if r is None else ("responding" if r else "not_responding")
 
 
 def call_with_timeout(func, timeout_seconds, *args, **kwargs):
@@ -311,6 +389,16 @@ class EPLANConnectionManager:
         # Lazy: DLLs load on first use so tools like eplan_versions can run
         # without committing this process to one version's .NET runtime.
         self._clr_initialized = False
+        # EPLAN.exe behind the connection, when it is local and identifiable.
+        self.pid = None
+        # A call abandoned while EPLAN was still running it:
+        # {"thread", "action", "since"}. While its thread lives, new calls get
+        # EplanBusy instead of a thread of their own, so a wedged EPLAN costs
+        # one stuck thread, not one per retry.
+        self._stuck = None
+        # Tools run on worker threads, so two calls can overlap; EPLAN gets
+        # one call at a time.
+        self._exec_lock = threading.Lock()
 
     def _setup_api(self) -> bool:
         """Load EPLAN DLLs via pythonnet."""
@@ -477,6 +565,17 @@ class EPLANConnectionManager:
                         self.host = host
                         self.port = candidate
                         self.connected = True
+                        # Which EPLAN.exe to watch for dialogs. Unknown for a
+                        # remote host, or when the port has no unique owner.
+                        # self._stuck is deliberately kept: a call abandoned
+                        # on the old client may still be running in EPLAN.
+                        self.pid = None
+                        if host in self.LOCAL_HOSTS:
+                            try:
+                                from process_control import _listener_pid
+                                self.pid = _listener_pid(candidate)
+                            except Exception:
+                                pass
                         keep = True
                         logger.info(f"Connected to EPLAN at {host}:{candidate}")
                         return {
@@ -515,15 +614,36 @@ class EPLANConnectionManager:
         if not self.connected or not self.client:
             return {"alive": False, "message": "Not connected"}
 
-        alive, timed_out, error = call_with_timeout(self.client.Ping, timeout_seconds)
+        # A call still stuck in EPLAN: answer from Windows instead of adding a
+        # Ping thread that would only get stuck behind it.
+        busy = self._busy_failure("Ping")
+        if busy is not None:
+            busy.pop("action", None)
+            return dict(busy, alive=False)
+
+        worker, value = self._start(self.client.Ping)
+        worker.join(timeout_seconds)
+        timed_out = worker.is_alive()
+        alive, error = value.get("value"), value.get("error")
         if timed_out:
             # Not marked disconnected: the client may still be valid and EPLAN
             # merely busy (a modal dialog, a long redraw). Saying so is more
             # useful than guessing either way.
-            return {"alive": False, "timed_out": True,
-                    "message": f"EPLAN did not answer Ping within {timeout_seconds}s - "
-                               "it is running but not servicing remoting calls "
-                               "(a modal dialog or a long operation will do this)"}
+            self._stuck = {"thread": worker, "action": "Ping", "since": time.time()}
+            result = {"alive": False, "timed_out": True,
+                      "message": f"EPLAN did not answer Ping within {timeout_seconds}s - "
+                                 "it is running but not servicing remoting calls "
+                                 "(a modal dialog or a long operation will do this)"}
+            pids = self._watch_pids()
+            dialogs = [w for w in _list_windows(pids) if w["blocking"]]
+            if dialogs:
+                result["dialogs"] = dialogs
+                result["next_step"] = self._dialog_next_step(dialogs[0])
+            else:
+                result["eplan_state"] = eplan_state(pids)
+                result["next_step"] = ("Wait a few seconds and call eplan_ping again; "
+                                       "eplan_list_dialogs shows any prompt EPLAN waits on.")
+            return result
         if error is not None:
             self.connected = False
             return {"alive": False, "message": f"Ping failed: {error}"}
@@ -531,6 +651,143 @@ class EPLANConnectionManager:
             "alive": bool(alive),
             "message": "EPLAN responding" if alive else "No response"
         }
+
+    # ------------------------------------------------------------------
+    # Bounded calls into EPLAN
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _start(func, *args):
+        """Run func(*args) on a daemon thread; returns (thread, box) where box
+        gets "value" or "error". The thread is never joined past a deadline:
+        it is stuck in native code and cannot be interrupted."""
+        box = {}
+
+        def run():
+            try:
+                box["value"] = func(*args)
+            except BaseException as e:      # noqa: BLE001 - reported, not swallowed
+                box["error"] = e
+
+        worker = threading.Thread(target=run, daemon=True,
+                                  name=f"eplan-call-{getattr(func, '__name__', 'anon')}")
+        worker.start()
+        return worker, box
+
+    def _watch_pids(self) -> set:
+        """EPLAN.exe PIDs to scan for dialogs: the connected one when known and
+        still running, else every local EPLAN, else none (remote host)."""
+        if self.host not in self.LOCAL_HOSTS:
+            return set()
+        running = set(eplan_pids())
+        # A stale pid (EPLAN closed outside the MCP, PID since reused) must
+        # not aim a scan or a click at another program.
+        if self.pid and self.pid in running:
+            return {self.pid}
+        return running
+
+    @staticmethod
+    def _dialog_next_step(dialog: dict) -> str:
+        title = dialog.get("title", "")
+        button = dialog.get("suggested_button")
+        then = ("then check the state (for example eplan_get_current_project): "
+                "the interrupted call's result is unknown.")
+        if button:
+            return (f"eplan_click_dialog_button(hwnd={dialog.get('hwnd')}, "
+                    f"button={button!r}, window_title={title!r}), {then} If the user may "
+                    "want a different answer, show them the dialog's text first.")
+        # Never name an unsafe button: that choice is the user's.
+        return (f"Show the user dialog {title!r} (eplan_list_dialogs has its text) and "
+                "ask which button to press, or ask them to answer it in EPLAN; "
+                f"{then}")
+
+    @staticmethod
+    def _typed_failure(error_type, action, error, next_step, **extra):
+        """The shared shape for an EPLAN call that did not complete."""
+        result = {"success": False, "errorType": error_type, "error": error,
+                  "message": error, "next_step": next_step, "action": action}
+        result.update({k: v for k, v in extra.items() if v})
+        return result
+
+    def _busy_failure(self, action):
+        """EplanBusy while an abandoned call is still running, else None."""
+        stuck = self._stuck
+        if not stuck:
+            return None
+        if not stuck["thread"].is_alive():
+            self._stuck = None
+            return None
+        pids = self._watch_pids()
+        dialogs = [w for w in _list_windows(pids) if w["blocking"]]
+        age = round(time.time() - stuck["since"])
+        error = (f"EPLAN is still busy with an earlier call ({stuck['action']}), "
+                 f"abandoned {age}s ago, so this call was not sent.")
+        if dialogs:
+            next_step = self._dialog_next_step(dialogs[0])
+        else:
+            next_step = ("Wait and retry; eplan_ping says when EPLAN answers again, and "
+                         "eplan_list_dialogs shows any prompt it is waiting on.")
+        return self._typed_failure("EplanBusy", action, error, next_step,
+                                   dialogs=dialogs, eplan_state=eplan_state(pids),
+                                   in_flight_action=stuck["action"])
+
+    def _call_eplan(self, action):
+        """client.ExecuteAction(action), bounded by action_timeout_s() and by
+        any blocking dialog. Returns None when the call completed, or a typed
+        failure dict. An exception from EPLAN is re-raised, as before."""
+        busy = self._busy_failure(action)
+        if busy is not None:
+            return busy
+        timeout = action_timeout_s()
+        if not self._exec_lock.acquire(timeout=timeout):
+            return self._typed_failure(
+                "EplanBusy", action,
+                f"Another call kept EPLAN busy for {timeout:g}s, so this one was not sent.",
+                "Retry once the other call has returned.")
+        try:
+            busy = self._busy_failure(action)       # set while we waited
+            if busy is not None:
+                return busy
+            pids = self._watch_pids()
+            before = _top_hwnds(pids) if pids else set()
+            self.client.SynchronousMode = True
+            worker, box = self._start(self.client.ExecuteAction, action)
+            started = time.monotonic()
+            deadline = started + timeout
+            seen = set()                            # blocking hwnds on the last check
+            while True:
+                remaining = deadline - time.monotonic()
+                worker.join(max(0.0, min(DIALOG_CHECK_S, remaining) if pids else remaining))
+                if not worker.is_alive():
+                    if "error" in box:
+                        raise box["error"]
+                    return None
+                if time.monotonic() >= deadline:
+                    self._stuck = {"thread": worker, "action": action, "since": time.time()}
+                    dialogs = [w for w in _list_windows(pids, before) if w["blocking"]]
+                    return self._typed_failure(
+                        "EplanActionTimeout", action,
+                        f"EPLAN did not finish this call within {timeout:g}s. It may "
+                        "still be running it, so its result is unknown.",
+                        self._dialog_next_step(dialogs[0]) if dialogs else
+                        ("Call eplan_ping until EPLAN answers, then check the state. "
+                         "For a call that is just slow (a full-project export), raise "
+                         "EPLAN_MCP_ACTION_TIMEOUT."),
+                        timed_out=True, dialogs=dialogs, eplan_state=eplan_state(pids))
+                dialogs = [w for w in _list_windows(pids, before) if w["blocking"]]
+                confirmed = [w for w in dialogs if w["hwnd"] in seen]
+                seen = {w["hwnd"] for w in dialogs}
+                if confirmed:
+                    self._stuck = {"thread": worker, "action": action, "since": time.time()}
+                    d = confirmed[0]
+                    return self._typed_failure(
+                        "EplanBlockedByDialog", action,
+                        f"EPLAN stopped at dialog {d.get('title')!r} and is waiting for "
+                        "an answer, so this call cannot finish on its own. It was "
+                        f"abandoned after {time.monotonic() - started:.0f}s.",
+                        self._dialog_next_step(d), timed_out=True, dialogs=confirmed)
+        finally:
+            self._exec_lock.release()
 
     @staticmethod
     def _shape_messages(result: dict) -> dict:
@@ -721,9 +978,9 @@ class EPLANConnectionManager:
             # to avoid infinite recursion. Also run directly if quiet_mode is False.
             if action_name_lower in ("registerscript", "executescript", "unregisterscript") or not quiet_mode:
                 logger.info(f"Executing directly: {action}")
-                self.client.SynchronousMode = True
-                self.client.ExecuteAction(action)
-                result = {"success": True, "message": f"Executed directly: {action}", "action": action}
+                failure = self._call_eplan(action)
+                result = failure or {"success": True, "message": f"Executed directly: {action}",
+                                     "action": action}
                 # Script plumbing (register/execute/unregister) is logged only
                 # as part of the wrapped action, not as separate entries.
                 if action_name_lower not in ("registerscript", "executescript", "unregisterscript"):
@@ -1150,6 +1407,13 @@ public class QuietExecute_{exec_id}
             # QuietMode - the whole point of this path - that is an error the
             # caller cannot even see. See scripted.py.
             exec_result = self.execute_action(f'ExecuteScript /ScriptFile:"{script_path}"', quiet_mode=False)
+            if exec_result.get("errorType") in TYPED_FAILURES:
+                # Blocked, timed out or busy: the wrapped action may well have
+                # started, so this is not a plumbing fault - pass it on as is,
+                # under the action the caller asked for.
+                result = dict(exec_result, action=action)
+                self._log_action(action, result, started)
+                return result
             if not exec_result.get("success"):
                 return self._script_failure(
                     action, script_path, started,

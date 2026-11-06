@@ -168,7 +168,9 @@ def test_logged_keys_cover_the_diagnostic_result_contract():
                 "eplanMessages", "eplanMessagesTotal",
                 "eplanMessagesTruncated", "eplanMessagesLevels",
                 "eplanMessagesUnbounded", "eplanMessagesFromContextOnly",
-                "errorFrom"}
+                "errorFrom",
+                # calls that did not complete (EplanBlockedByDialog & co.)
+                "timed_out", "in_flight_action", "eplan_state"}
     assert set(LOGGED_RESULT_KEYS) == expected, (
         "LOGGED_RESULT_KEYS changed to %r. If a diagnostic field was added to "
         "the action result, this is the right place to notice - update the "
