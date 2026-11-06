@@ -33,6 +33,7 @@ answer for:
 
     live_query_functions    enumerate the open project's functions (devices)
     live_query_pages        enumerate the open project's pages
+    live_plc_io_list        the PLC I/O assignment list (addresses, texts, modules)
     live_set_function_text  set FUNC_TEXT on functions matched by name (write)
     live_set_connection_designations
                             set a function's connection point numbers (write)
@@ -59,6 +60,7 @@ import uuid
 
 from ._base import cs_escape
 from .scripted import _execute_script
+from . import target
 
 # EPLAN's dialogs join a function's connection point designations with this
 # separator ("Y09¶Y10"); the API stores one designation per index, so it is
@@ -526,13 +528,16 @@ _HELPERS = '''
             lsType = FindType("Eplan.EplApi.DataModel.LockingStep");
             lockStep = Activator.CreateInstance(lsType);
 
-            // Current project without ProjectManager.
-            Type ssType = FindType("Eplan.EplApi.HEServices.SelectionSet");
-            object ss = Activator.CreateInstance(ssType);
-            MethodInfo getCur = ssType.GetMethod("GetCurrentProject", new Type[] { typeof(bool) });
-            object project = getCur.Invoke(ss, new object[] { false });
-            if (project == null)
-                throw new Exception("No project is currently open/selected in EPLAN.");
+            // The target project (live_set_target_project), or the current one.
+            object project = ResolveProject("{{TARGET_PROJECT}}");
+            // A project that is not the GUI's current one is not write-locked
+            // by the LockingStep alone (Function.Create on one of its pages
+            // throws LockingException); LockObject takes the lock explicitly.
+            if ("{{TARGET_PROJECT}}".Length > 0)
+            {
+                MethodInfo lockObj = MethodByShape(project.GetType(), "LockObject", new string[] { }, false);
+                if (lockObj != null) { try { lockObj.Invoke(project, null); } catch { } }
+            }
 
             results["project"] = PropText(project, "ProjectName");
 
@@ -567,6 +572,56 @@ _FOOTER = '''
 # without this module having to know about them.
 _START_MARKER = "    [Start]\n"
 
+# Spliced in by _script() (and by ops.py) rather than kept in _HELPERS: the
+# metadata-only scripts in introspect.py reuse the static block above and must
+# stay free of any project lookup.
+_PROJECT_HELPER = '''
+    // Which project a script works on. An empty `wanted` keeps the historical
+    // behaviour: SelectionSet.GetCurrentProject, i.e. whatever the user last
+    // clicked in the GUI. A path (or project name) selects that project from
+    // ProjectManager.OpenProjects instead, so the user switching projects in
+    // EPLAN mid-session cannot redirect a write. Set through
+    // live_set_target_project; see target.py.
+    static object ResolveProject(string wanted)
+    {
+        if (string.IsNullOrEmpty(wanted))
+        {
+            Type ssType = FindType("Eplan.EplApi.HEServices.SelectionSet");
+            object ss = Activator.CreateInstance(ssType);
+            MethodInfo getCur = ssType.GetMethod("GetCurrentProject", new Type[] { typeof(bool) });
+            object project = getCur.Invoke(ss, new object[] { false });
+            if (project == null)
+                throw new Exception("No project is currently open/selected in EPLAN.");
+            return project;
+        }
+        string want = wanted.Replace("/", "\\\\").Trim().ToUpperInvariant();
+        Type pmType = FindType("Eplan.EplApi.DataModel.ProjectManager");
+        object pm = Activator.CreateInstance(pmType);
+        List<string> open = new List<string>();
+        try
+        {
+            object projects = RequireReadable(pmType, "OpenProjects").GetValue(pm, null);
+            foreach (object p in (IEnumerable)projects)
+            {
+                if (p == null) continue;
+                string link = PropText(p, "ProjectLinkFilePath") ?? "";
+                string name = PropText(p, "ProjectName") ?? "";
+                string norm = link.Replace("/", "\\\\").Trim().ToUpperInvariant();
+                if (norm == want || name.ToUpperInvariant() == want) return p;
+                open.Add(link.Length > 0 ? link : name);
+            }
+        }
+        finally
+        {
+            try { MethodInfo d = pmType.GetMethod("Dispose", Type.EmptyTypes); if (d != null) d.Invoke(pm, null); }
+            catch { }
+        }
+        throw new Exception("Target project is not open in EPLAN: '" + wanted + "'. Open projects: " +
+            (open.Count == 0 ? "(none)" : string.Join(" | ", open.ToArray())) +
+            ". Open it with eplan_open_project, or change the target with live_set_target_project.");
+    }
+'''
+
 
 def _script(class_name, body, extra_helpers=""):
     """
@@ -600,6 +655,10 @@ def _script(class_name, body, extra_helpers=""):
         helpers = helpers.replace(
             _START_MARKER, extra_helpers.rstrip() + "\n\n" + _START_MARKER, 1
         )
+    helpers = helpers.replace(
+        _START_MARKER, _PROJECT_HELPER.strip("\n") + "\n\n" + _START_MARKER, 1
+    )
+    helpers = helpers.replace("{{TARGET_PROJECT}}", cs_escape(target.get()))
     return _HEADER + class_name + helpers + body + _FOOTER
 
 
@@ -737,6 +796,266 @@ def live_query_pages(contains: str = None, limit: int = 100,
         _script("LiveQueryPages_" + uuid.uuid4().hex[:6], body),
         timeout=timeout_seconds,
     )
+
+
+_IDENT_RE = None
+
+
+def _split_identifier(full):
+    """Split "=ST1+CE-A1:DI a.0" into its IEC 81346 parts.
+
+    Returns installation ("=ST1"), location ("+CE"), device ("-A1") and
+    connectionPoint ("DI a.0"); missing parts come back as "". Used to group
+    I/O per station without another round-trip into EPLAN.
+    """
+    global _IDENT_RE
+    if _IDENT_RE is None:
+        import re
+        _IDENT_RE = re.compile(r"^(=[^+\-:]*)?(\+[^\-:]*)?(-[^:]*)?(?::(.*))?$")
+    m = _IDENT_RE.match(full or "")
+    if not m:
+        return {"installation": "", "location": "", "device": full or "", "connectionPoint": ""}
+    inst, loc, dev, cp = m.groups()
+    return {"installation": inst or "", "location": loc or "",
+            "device": dev or "", "connectionPoint": cp or ""}
+
+
+def _split_multilingual(raw):
+    """Turn EPLAN's "es_ES@Marcha;en_US@Start;" into {"es_ES": "Marcha", ...}.
+
+    A language-neutral text ("??_??@text;") comes back under the key "*".
+    Plain text without language markers is returned under "*" as well.
+    """
+    out = {}
+    if not raw:
+        return out
+    for chunk in raw.split(";"):
+        if not chunk:
+            continue
+        if "@" in chunk:
+            lang, _, text = chunk.partition("@")
+            out["*" if lang.startswith("??") else lang] = text
+        else:
+            out["*"] = chunk
+    return out
+
+
+_SUPPLY_PINS = ("L+", "M", "PE", "FE", "1M", "2M", "3M", "3L+", "4L+", "4M", "1L+", "2L+")
+
+
+def _plc_kind(address, data_type, connection_point):
+    """DI / DO / AI / AO / supply / other from what the point carries."""
+    cp = (connection_point or "").strip()
+    if cp in _SUPPLY_PINS:
+        return "supply"
+    a = (address or "").strip().upper()
+    if not a:
+        return "other"
+    is_in = a[0] in ("I", "E")
+    is_out = a[0] in ("Q", "A")
+    word = len(a) > 1 and a[1] in ("W", "D", "B")
+    dt = (data_type or "").upper()
+    analog = word or (dt != "" and dt != "BOOL")
+    if is_in:
+        return "AI" if analog else "DI"
+    if is_out:
+        return "AO" if analog else "DO"
+    return "other"
+
+
+def live_plc_io_list(contains: str = None, include_unaddressed: bool = False,
+                     limit: int = 2000, timeout_seconds: float = 180.0) -> dict:
+    """
+    The PLC I/O assignment list of the open project, as JSON. Read-only.
+
+    Walks every function of the project and returns the PLC connection
+    points (the DI/DO/AI/AO channels and, optionally, the supply pins) with
+    the data a PLC programmer needs to build the program without opening
+    EPLAN: full identifier split into =installation / +location / -device /
+    connection point, PLC address, symbolic address, data type, channel and
+    plug designation, the function text per language, the page, and the
+    PLC box (module) the point belongs to. The PLC boxes themselves come in
+    a second list with their parts, CPU flag, rack, slot, station name,
+    PROFINET device name and configuration project - empty strings where the
+    designer left them blank.
+
+    Reads the live object model, so unsaved changes count. This is the direct
+    alternative to exporting PLC data with eplan_plc_export (AML / TIA XML)
+    and parsing the file; use that export when TIA Portal itself must import
+    the hardware configuration.
+
+    Args:
+        contains: Optional case-insensitive substring filter on the full
+            identifier ("=ST1" for one station, "-A2" for one module).
+        include_unaddressed: Also return PLC points without a PLC address
+            (supply pins L+/M/PE, unused channels). Default False.
+        limit: Max points to return (default 2000). "matched" reports how
+            many passed the filters before the cap.
+        timeout_seconds: Max seconds to wait for the script (default 180; a
+            project with thousands of functions takes a while to walk).
+
+    Returns:
+        dict with "points" (list of {"name", "installation", "location",
+        "device", "connectionPoint", "kind" (DI/DO/AI/AO/supply/other),
+        "address", "symbolicAddress", "dataType", "channel", "plug",
+        "functionText" ({lang: text}), "functionTextRaw", "page", "module"
+        (the PLC box identifier)}), "modules" (list of {"name", "parts",
+        "isCpu", "rack", "slot", "stationName", "deviceName",
+        "configurationProject", "functionText", "page"}), "byInstallation"
+        ({installation: point count}), "matched", "returned".
+    """
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        return {"success": False, "error": f"Invalid limit: {limit!r}. Must be an integer."}
+
+    body = _FINDER + '''            Type filterType = FindType("Eplan.EplApi.DataModel.FunctionsFilter");
+            object filter = Activator.CreateInstance(filterType);
+            MethodInfo getFunctions = finderType.GetMethod("GetFunctions", new Type[] { filterType });
+            IEnumerable found = (IEnumerable)getFunctions.Invoke(finder, new object[] { filter });
+
+            string[] pointProps = new string[] {
+                "FUNC_FULLNAME_WITH_CONNECTIONDESIGNATIONS", "FUNC_FULLDEVICETAG",
+                "FUNC_CONNECTIONDESIGNATION1", "FUNC_PLCADDRESS",
+                "FUNC_PLCSYMBOLICADDRESS_MANUAL", "FUNC_PLCSYMBOLICADDRESS_AUTOMATIC",
+                "FUNC_PLCSYMBOLICADDRESS_CALCULATED", "FUNC_PLCDATATYPE",
+                "FUNC_PLCCHANNEL_DESIGNATION_MANUAL", "FUNC_PLCCHANNEL_DESIGNATION_AUTOMATIC",
+                "FUNC_PLCPLUG_DESIGNATION_MANUAL", "FUNC_PLCPLUG_DESIGNATION_AUTOMATIC",
+                "FUNC_TEXT", "FUNC_PLCCPU_INDIRECT", "FUNC_PLCSTATIONNAME_INDIRECT",
+                "FUNC_PLCCONFIGURATIONPROJECT_INDIRECT", "FUNC_PLCRACK_INDIRECT" };
+            string[] boxProps = new string[] {
+                "FUNC_FULLDEVICETAG", "FUNC_TEXT", "FUNC_PLCCPU", "FUNC_PLCRACK",
+                "FUNC_PLCTHISRACK", "FUNC_PLC_SUBSLOT", "FUNC_PLCSTATIONNAME",
+                "FUNC_PLCSTATIONNAME_CPU", "FUNC_PLCDEVICENAME",
+                "FUNC_PLCCONFIGURATIONPROJECT", "FUNC_PLCCONFIGURATIONPROJECT_CPU",
+                "FUNC_PLCTYPE_ID", "FUNC_PLCBUS_ADDRESS_INDIRECT" };
+
+            List<Dictionary<string, object>> points = new List<Dictionary<string, object>>();
+            List<Dictionary<string, object>> boxes = new List<Dictionary<string, object>>();
+            int matched = 0;
+            foreach (object fn in found)
+            {
+                if (fn == null) continue;
+                string tn = fn.GetType().Name;
+                object props = TryRead(fn, "Properties", null);
+                if (props == null) continue;
+                if (tn == "PLC")
+                {
+                    Dictionary<string, object> b = new Dictionary<string, object>();
+                    foreach (string pn in boxProps) { string v = PropText(props, pn); b[pn] = v == null ? "" : v; }
+                    b["name"] = PropText(fn, "Name") ?? "";
+                    List<string> parts = new List<string>();
+                    object refs = TryRead(fn, "ArticleReferences", null);
+                    if (refs != null) foreach (object ar in (IEnumerable)refs) { string pnr = PropText(ar, "PartNr"); if (!string.IsNullOrEmpty(pnr)) parts.Add(pnr); }
+                    b["parts"] = parts;
+                    object bpg = TryRead(fn, "Page", null); b["page"] = bpg == null ? "" : (PropText(bpg, "Name") ?? "");
+                    boxes.Add(b);
+                    continue;
+                }
+                if (tn != "Terminal") continue;
+                string plug = PropText(props, "FUNC_PLCPLUG_DESIGNATION_AUTOMATIC");
+                string addr = PropText(props, "FUNC_PLCADDRESS");
+                string dtype = PropText(props, "FUNC_PLCDATATYPE");
+                if (string.IsNullOrEmpty(plug) && string.IsNullOrEmpty(addr) && string.IsNullOrEmpty(dtype)) continue;
+                string full = PropText(props, "FUNC_FULLNAME_WITH_CONNECTIONDESIGNATIONS") ?? (PropText(fn, "Name") ?? "");
+                if (!Matches(full, "''' + cs_escape(contains or "") + '''")) continue;
+                if (string.IsNullOrEmpty(addr) && !''' + ("true" if include_unaddressed else "false") + ''') continue;
+                matched++;
+                if (points.Count >= ''' + str(int(limit)) + ''') continue;
+                Dictionary<string, object> d = new Dictionary<string, object>();
+                foreach (string pn in pointProps) { string v = PropText(props, pn); d[pn] = v == null ? "" : v; }
+                d["name"] = full;
+                object pg = TryRead(fn, "Page", null); d["page"] = pg == null ? "" : (PropText(pg, "Name") ?? "");
+                points.Add(d);
+            }
+
+            results["success"] = true;
+            results["matched"] = matched;
+            results["rawPoints"] = points;
+            results["rawBoxes"] = boxes;
+'''
+    r = _execute_script(
+        _script("LivePlcIoList_" + uuid.uuid4().hex[:6], body),
+        timeout=timeout_seconds,
+    )
+    res = r.get("results") if isinstance(r, dict) and isinstance(r.get("results"), dict) else r
+    if not isinstance(res, dict) or not res.get("success") or "rawPoints" not in res:
+        return r
+    return _shape_plc_io(res)
+
+
+def _first(d, *keys):
+    for k in keys:
+        v = d.get(k)
+        if v:
+            return v
+    return ""
+
+
+def _shape_plc_io(res):
+    """Turn the raw property dump of live_plc_io_list into the documented shape."""
+    points = []
+    by_inst = {}
+    for raw in res.get("rawPoints") or []:
+        full = raw.get("name") or raw.get("FUNC_FULLNAME_WITH_CONNECTIONDESIGNATIONS") or ""
+        ident = _split_identifier(full)
+        cp = raw.get("FUNC_CONNECTIONDESIGNATION1") or ident["connectionPoint"]
+        address = raw.get("FUNC_PLCADDRESS") or ""
+        data_type = raw.get("FUNC_PLCDATATYPE") or ""
+        text_raw = raw.get("FUNC_TEXT") or ""
+        pt = {
+            "name": full,
+            "installation": ident["installation"],
+            "location": ident["location"],
+            "device": ident["device"],
+            "connectionPoint": cp,
+            "kind": _plc_kind(address, data_type, cp),
+            "address": address,
+            "symbolicAddress": _first(raw, "FUNC_PLCSYMBOLICADDRESS_MANUAL",
+                                      "FUNC_PLCSYMBOLICADDRESS_AUTOMATIC",
+                                      "FUNC_PLCSYMBOLICADDRESS_CALCULATED"),
+            "dataType": data_type,
+            "channel": _first(raw, "FUNC_PLCCHANNEL_DESIGNATION_MANUAL",
+                              "FUNC_PLCCHANNEL_DESIGNATION_AUTOMATIC"),
+            "plug": _first(raw, "FUNC_PLCPLUG_DESIGNATION_MANUAL",
+                           "FUNC_PLCPLUG_DESIGNATION_AUTOMATIC"),
+            "functionText": _split_multilingual(text_raw),
+            "functionTextRaw": text_raw,
+            "page": raw.get("page") or "",
+            "module": raw.get("FUNC_FULLDEVICETAG") or "",
+            "cpu": raw.get("FUNC_PLCCPU_INDIRECT") or "",
+            "stationName": raw.get("FUNC_PLCSTATIONNAME_INDIRECT") or "",
+            "configurationProject": raw.get("FUNC_PLCCONFIGURATIONPROJECT_INDIRECT") or "",
+        }
+        points.append(pt)
+        key = ident["installation"] or "="
+        by_inst[key] = by_inst.get(key, 0) + 1
+    modules = []
+    for raw in res.get("rawBoxes") or []:
+        text_raw = raw.get("FUNC_TEXT") or ""
+        modules.append({
+            "name": raw.get("FUNC_FULLDEVICETAG") or raw.get("name") or "",
+            "parts": raw.get("parts") or [],
+            "isCpu": (raw.get("FUNC_PLCCPU") or "") in ("1", "True", "true"),
+            "rack": _first(raw, "FUNC_PLCRACK", "FUNC_PLCTHISRACK"),
+            "slot": raw.get("FUNC_PLC_SUBSLOT") or "",
+            "stationName": _first(raw, "FUNC_PLCSTATIONNAME", "FUNC_PLCSTATIONNAME_CPU"),
+            "deviceName": raw.get("FUNC_PLCDEVICENAME") or "",
+            "busAddress": raw.get("FUNC_PLCBUS_ADDRESS_INDIRECT") or "",
+            "typeId": raw.get("FUNC_PLCTYPE_ID") or "",
+            "configurationProject": _first(raw, "FUNC_PLCCONFIGURATIONPROJECT",
+                                           "FUNC_PLCCONFIGURATIONPROJECT_CPU"),
+            "functionText": _split_multilingual(text_raw),
+            "page": raw.get("page") or "",
+        })
+    return {
+        "success": True,
+        "points": points,
+        "modules": modules,
+        "byInstallation": by_inst,
+        "matched": res.get("matched", len(points)),
+        "returned": len(points),
+    }
 
 
 def live_set_function_text(name: str, text: str, limit: int = 1,

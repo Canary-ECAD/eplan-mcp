@@ -35,11 +35,13 @@ def _string_literals_balanced(cs: str) -> bool:
 ALL_TOOLS = [
     (live.live_query_functions, {}),
     (live.live_query_pages, {}),
+    (live.live_plc_io_list, {}),
     (live.live_set_function_text, {"name": "+X-K1", "text": "hi"}),
     (live.live_set_connection_designations,
      {"name": "+X-K1", "designations": ["Y11", "Y12"]}),
     (live.live_read_check_messages, {}),
 ]
+
 
 
 # ---------------------------------------------------------------------------
@@ -380,3 +382,364 @@ def test_read_check_messages_default_contains_is_empty_string(capture):
     # what an omitted `contains` actually compiles to, not the string "None".
     live.live_read_check_messages()
     assert 'string filterText = "";' in capture["script"]
+
+
+# ---------------------------------------------------------------------------
+# live_plc_io_list: the Python-side shaping must not need EPLAN
+# ---------------------------------------------------------------------------
+
+def test_split_identifier_iec_parts():
+    assert live._split_identifier("=ST1+CE-A1:DI a.0") == {
+        "installation": "=ST1", "location": "+CE", "device": "-A1",
+        "connectionPoint": "DI a.0"}
+    assert live._split_identifier("=+CE-A2:0+")["installation"] == "="
+    assert live._split_identifier("-X1:12") == {
+        "installation": "", "location": "", "device": "-X1", "connectionPoint": "12"}
+
+
+def test_split_multilingual_and_neutral_text():
+    assert live._split_multilingual("es_ES@Marcha;en_US@Start;") == {"es_ES": "Marcha", "en_US": "Start"}
+    assert live._split_multilingual("??_??@Presion;") == {"*": "Presion"}
+    assert live._split_multilingual("") == {}
+
+
+@pytest.mark.parametrize("address,dtype,cp,kind", [
+    ("I0.0", "BOOL", "DI a.0", "DI"),
+    ("Q0.1", "BOOL", "DQ a.1", "DO"),
+    ("IW96", "WORD", "0+", "AI"),
+    ("QW80", "INT", "0+", "AO"),
+    ("", "", "L+", "supply"),
+    ("", "", "DI a.7", "other"),
+])
+def test_plc_kind(address, dtype, cp, kind):
+    assert live._plc_kind(address, dtype, cp) == kind
+
+
+def test_shape_plc_io_groups_by_installation_and_picks_manual_over_automatic():
+    raw = {
+        "success": True, "matched": 2,
+        "rawPoints": [
+            {"name": "=ST1+CE-A1:DI a.0", "FUNC_FULLDEVICETAG": "=ST1+CE-A1",
+             "FUNC_CONNECTIONDESIGNATION1": "DI a.0", "FUNC_PLCADDRESS": "I0.0",
+             "FUNC_PLCDATATYPE": "BOOL", "FUNC_TEXT": "es_ES@Marcha;en_US@Start;",
+             "FUNC_PLCSYMBOLICADDRESS_MANUAL": "ST1_Start",
+             "FUNC_PLCSYMBOLICADDRESS_AUTOMATIC": "auto", "page": "=ST1+CE/2"},
+            {"name": "=ST2+CE-A1:DI a.0", "FUNC_FULLDEVICETAG": "=ST2+CE-A1",
+             "FUNC_CONNECTIONDESIGNATION1": "DI a.0", "FUNC_PLCADDRESS": "I1.0",
+             "FUNC_PLCDATATYPE": "BOOL", "FUNC_TEXT": "", "page": ""},
+        ],
+        "rawBoxes": [
+            {"name": "=ST1+CE-A1", "FUNC_FULLDEVICETAG": "=ST1+CE-A1", "FUNC_PLCCPU": "1",
+             "FUNC_PLCRACK": "0", "FUNC_PLC_SUBSLOT": "1", "parts": ["SIE.X"],
+             "FUNC_TEXT": "en_US@CPU;", "page": "=ST1+CE/2"},
+        ],
+    }
+    out = live._shape_plc_io(raw)
+    assert out["success"] and out["returned"] == 2 and out["matched"] == 2
+    assert out["byInstallation"] == {"=ST1": 1, "=ST2": 1}
+    p0 = out["points"][0]
+    assert p0["installation"] == "=ST1" and p0["device"] == "-A1" and p0["kind"] == "DI"
+    assert p0["symbolicAddress"] == "ST1_Start"
+    assert p0["functionText"] == {"es_ES": "Marcha", "en_US": "Start"}
+    m0 = out["modules"][0]
+    assert m0["isCpu"] is True and m0["rack"] == "0" and m0["slot"] == "1" and m0["parts"] == ["SIE.X"]
+
+
+def test_plc_io_list_filters_are_interpolated_safely(capture):
+    live.live_plc_io_list(contains=INJECTION, include_unaddressed=True, limit="25")
+    cs = capture["script"]
+    assert _string_literals_balanced(cs)
+    assert "!true) continue;" in cs
+    assert "points.Count >= 25" in cs
+
+
+def test_plc_io_list_returns_raw_result_when_script_failed(monkeypatch):
+    monkeypatch.setattr(live, "_execute_script", lambda s, timeout=0: {"success": False, "error": "boom"})
+    out = live.live_plc_io_list()
+    assert out == {"success": False, "error": "boom"}
+
+
+# ---------------------------------------------------------------------------
+# reports_live: generated C# shape and the S029153 hint
+# ---------------------------------------------------------------------------
+
+def test_create_report_script_shape(monkeypatch):
+    from api.actions import reports_live
+    captured = {}
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True, "results": {"success": True}})
+    reports_live.live_create_report("TerminalDiagram", form_name="F13_001")
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"TerminalDiagram"' in cs and '"F13_001"' in cs
+    assert '{ block, "/1" }' in cs, "empty first-page name is refused by EPLAN (S029035)"
+    assert "GenerateProject" in cs
+    for line in cs.splitlines():
+        if line.strip().startswith("using "):
+            assert "Eplan.EplApi.DataModel" not in line and "Eplan.EplApi.HEServices" not in line
+
+
+def test_create_report_without_generate_and_injection(monkeypatch):
+    from api.actions import reports_live
+    captured = {}
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True, "results": {}})
+    reports_live.live_create_report(INJECTION, form_name=INJECTION, page_name=INJECTION, generate=False)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "if (false)" in cs
+
+
+def test_create_report_adds_hint_on_missing_form(monkeypatch):
+    from api.actions import reports_live
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: {"success": False, "error": "Exception: S029153 El formulario no se ha encontrado"})
+    out = reports_live.live_create_report("PartsList", form_name="F03_001")
+    assert "F03_001" in out["hint"] and "Sincronizar" in out["hint"]
+
+
+def test_report_types_script_is_read_only(monkeypatch):
+    from api.actions import reports_live
+    captured = {}
+    monkeypatch.setattr(reports_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    reports_live.live_report_types()
+    assert "GuardScratch(project," not in captured["script"], "read-only tool must not run the write guard"
+    assert "PAGE_FORMULAR" in captured["script"]
+
+
+# ---------------------------------------------------------------------------
+# structure_live: copy pages to another installation designation
+# ---------------------------------------------------------------------------
+
+def test_copy_pages_script_shape(monkeypatch):
+    from api.actions import structure_live
+    captured = {}
+    monkeypatch.setattr(structure_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    structure_live.live_copy_pages_to_structure(["+CE/2"], ["=ST2", "ST3"], keep_devices=["-A1"], location="+CE")
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert 'new string[] { "ST2", "ST3" }' in cs, "leading = must be stripped"
+    assert 'string locOverride = "CE";' in cs, "leading + must be stripped"
+    assert 'new string[] { "-A1" }' in cs
+    assert 'Enum.Parse(nmT, "Ignore")' in cs
+    assert 'GetWritable(pl.GetType(), "VisibleName")' in cs
+
+
+def test_copy_pages_rejects_bad_lists():
+    from api.actions import structure_live
+    assert structure_live.live_copy_pages_to_structure([], ["ST2"])["success"] is False
+    assert structure_live.live_copy_pages_to_structure(["+CE/2"], [])["success"] is False
+    assert structure_live.live_copy_pages_to_structure("+CE/2", ["ST2"])["success"] is False
+
+
+def test_copy_pages_injection_stays_in_literal(monkeypatch):
+    from api.actions import structure_live
+    captured = {}
+    monkeypatch.setattr(structure_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    structure_live.live_copy_pages_to_structure([INJECTION], [INJECTION], keep_devices=[INJECTION], location=INJECTION)
+    assert _string_literals_balanced(captured["script"])
+
+
+# ---------------------------------------------------------------------------
+# panel_live: captions read / edit
+# ---------------------------------------------------------------------------
+
+def _capture_panel(monkeypatch):
+    from api.actions import panel_live
+    captured = {}
+    monkeypatch.setattr(panel_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    return panel_live, captured
+
+
+def test_panel_captions_read_is_guard_free(monkeypatch):
+    panel_live, captured = _capture_panel(monkeypatch)
+    panel_live.live_panel_captions("+CE/0", ref=INJECTION)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project," not in cs
+    assert "PropertyPlacements" in cs and "GetBoundingBox" in cs
+
+
+def test_set_panel_captions_script_shape(monkeypatch):
+    panel_live, captured = _capture_panel(monkeypatch)
+    panel_live.live_set_panel_captions("+CE/0", "124/17/1409/0", hide=[20100, "PTIO-IN"], show=["20450"],
+                                       positions={"20010": [386, 223]}, legend_position=9)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"UseLocalPropertyPlacements"' in cs, "edits must switch to the local arrangement first"
+    assert 'new string[] { "20100", "PTIO-IN" }' in cs
+    assert 'new string[] { "20450" }' in cs
+    assert 'new string[] { "20010", "386.0", "223.0" }' in cs
+    assert "op_Implicit" in cs and "new object[] { 9 }" in cs
+    assert '"IsDocked"' in cs
+
+
+def test_set_panel_captions_rejects_bad_positions():
+    from api.actions import panel_live
+    assert panel_live.live_set_panel_captions("+CE/0", "-X1", positions=[1, 2])["success"] is False
+    assert panel_live.live_set_panel_captions("+CE/0", "-X1", positions={"20010": [1]})["success"] is False
+    assert panel_live.live_set_panel_captions("+CE/0", "-X1", legend_position="x")["success"] is False
+
+
+def test_set_panel_captions_without_legend_skips_indexer(monkeypatch):
+    panel_live, captured = _capture_panel(monkeypatch)
+    panel_live.live_set_panel_captions("+CE/0", "-X1", hide=[INJECTION], positions={INJECTION: [0, 0]})
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "if (false)" in cs
+
+
+# ---------------------------------------------------------------------------
+# terminals_live / cables_live / project_live
+# ---------------------------------------------------------------------------
+
+def _capture(monkeypatch, module):
+    captured = {}
+    monkeypatch.setattr(module, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    return captured
+
+
+def test_terminal_strips_read_is_guard_free(monkeypatch):
+    from api.actions import terminals_live
+    captured = _capture(monkeypatch, terminals_live)
+    terminals_live.live_terminal_strips(contains=INJECTION)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project," not in cs
+    assert '"TerminalStrip"' in cs and '== "Terminal"' in cs, "PLC points must be filtered by category"
+
+
+def test_set_terminal_strip_definition_script_shape(monkeypatch):
+    from api.actions import terminals_live
+    captured = _capture(monkeypatch, terminals_live)
+    terminals_live.live_set_terminal_strip_definition("-X1", text=INJECTION, part="PXC.1", properties={"FUNC_SUPPLEMENTARYFIELD1": INJECTION})
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"TerminalDefText", (short)1, (short)1' in cs
+    assert 'RequireMethod(tsT, "Create", new string[] { "Project", "FunctionDefinition" }' in cs
+    assert "propsIn[\"FUNC_SUPPLEMENTARYFIELD1\"]" in cs
+
+
+def test_set_terminal_strip_definition_placed_uses_create_page(monkeypatch):
+    from api.actions import terminals_live
+    captured = _capture(monkeypatch, terminals_live)
+    terminals_live.live_set_terminal_strip_definition("-X1", page="+CE/2", x=300, y=200)
+    cs = captured["script"]
+    assert 'RequireMethod(tsT, "Create", new string[] { "Page" }' in cs
+    assert "300.0, 200.0" in cs
+    assert terminals_live.live_set_terminal_strip_definition("-X1", page="+CE/2")["success"] is False
+
+
+def test_cables_read_is_guard_free(monkeypatch):
+    from api.actions import cables_live
+    captured = _capture(monkeypatch, cables_live)
+    cables_live.live_cables(contains=INJECTION)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project," not in cs
+    assert '"CableConnections"' in cs and '"CONNECTION_DESIGNATION"' in cs
+
+
+def test_place_cable_definition_script_shape(monkeypatch):
+    from api.actions import cables_live
+    captured = _capture(monkeypatch, cables_live)
+    cables_live.live_place_cable_definition("+CE/2", "-W1", 70, 112, 220, 112, text=INJECTION, generate=False)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert 'MakeVariantT(project, "SPECIAL", "CABDL", 0)' in cs
+    assert "MakePoint(pt, 70.0, 112.0), MakePoint(pt, 220.0, 112.0)" in cs
+    assert '"DESIGNATION_LOCATION"' in cs, "a bare -W1 must take the page structure"
+    assert cables_live.live_place_cable_definition("+CE/2", "-W1", "a", 1, 2, 3)["success"] is False
+
+
+def test_assign_cable_connections_script_shape(monkeypatch):
+    from api.actions import cables_live
+    captured = _capture(monkeypatch, cables_live)
+    cables_live.live_assign_cable_connections("+CE/2", INJECTION, generate=False)
+    cs = captured["script"]
+    assert _string_literals_balanced(cs)
+    assert "GuardScratch(project, false" in cs
+    assert '"CableNameParts"' in cs and '"CableDefinitionLine"' in cs
+    assert '"StartSymbolConnPoint"' in cs, "pin offsets are added to the device location"
+
+
+def test_create_project_refuses_outside_scratch(tmp_path, monkeypatch):
+    from api.actions import project_live
+    tpl = tmp_path / "t.zw9"
+    tpl.write_text("x")
+    r = project_live.live_create_project(r"C:\Projects\Real.elk", str(tpl))
+    assert r["success"] is False and "scratch" in r["error"]
+    r = project_live.live_create_project(str(tmp_path / "p.elk"), str(tmp_path / "missing.zw9"))
+    assert r["success"] is False and "Template not found" in r["error"]
+
+
+def test_create_project_clears_target_for_the_call(tmp_path, monkeypatch):
+    from api.actions import project_live, target
+    monkeypatch.setattr(project_live, "SCRATCH_ROOT", str(tmp_path))
+    tpl = tmp_path / "t.zw9"
+    tpl.write_text("x")
+    seen = {}
+
+    def fake(script, timeout=0):
+        seen["target_during"] = target.get()
+        seen["script"] = script
+        return {"success": True, "results": {"success": True, "project": "P"}}
+    monkeypatch.setattr(project_live, "_execute_script", fake)
+    target.set_target(r"D:\old.elk")
+    r = project_live.live_create_project(str(tmp_path / "new" / "P.elk"), str(tpl))
+    assert seen["target_during"] == ""
+    assert "CreateProject" in seen["script"] and _string_literals_balanced(seen["script"])
+    assert target.get().lower().endswith("p.elk")
+    target.set_target("")
+
+
+def test_project_templates_lists_zw9(tmp_path):
+    from api.actions import project_live
+    (tmp_path / "a.zw9").write_text("x")
+    (tmp_path / "b.ept").write_text("x")
+    (tmp_path / "c.txt").write_text("x")
+    r = project_live.live_project_templates(str(tmp_path))
+    assert r["success"] and r["count"] == 2
+    assert {t["kind"] for t in r["templates"]} == {"basic project", "template"}
+
+
+def test_assign_cable_connections_reassign_runs_after_conductors_exist(monkeypatch):
+    from api.actions import cables_live, generate
+    scripts = []
+
+    def fake_exec(script, timeout=0):
+        scripts.append(script)
+        return {"success": True, "results": {"success": True, "handle": "h", "cable": "=+CE-W1",
+                                             "crossed": [{"designation": "201", "assigned": "now"}],
+                                             "reassignedFromPart": "if (true)" in script}}
+    monkeypatch.setattr(cables_live, "_execute_script", fake_exec)
+    monkeypatch.setattr(generate, "generate_connections", lambda **kw: {"success": True})
+    monkeypatch.setattr(cables_live, "live_cables",
+                        lambda **kw: {"results": {"cables": [{"handle": "h", "conductors": [{"designation": "201"}]}]}})
+    r = cables_live.live_assign_cable_connections("+CE/2", "-W1", generate=True)
+    assert len(scripts) == 1 and "if (false)" in scripts[0]
+    scripts.clear()
+    r = cables_live.live_assign_cable_connections("+CE/2", "-W1", generate=True, reassign_from_part=True)
+    assert len(scripts) == 2 and "if (false)" in scripts[0] and "if (true)" in scripts[1]
+    assert "DoReassignWires" in scripts[1] and _string_literals_balanced(scripts[1])
+    assert r["results"]["reassignedFromPart"] is True and r["results"]["connectionsGenerated"] == 2
+
+
+def test_copy_pages_keeps_subcounter(monkeypatch):
+    from api.actions import structure_live
+    captured = {}
+    monkeypatch.setattr(structure_live, "_execute_script",
+                        lambda s, timeout=0: captured.setdefault("script", s) and {"success": True})
+    structure_live.live_copy_pages_to_structure(["+CE/2.a"], ["ST2"])
+    cs = captured["script"]
+    assert '"PAGE_SUBCOUNTER"' in cs and 'SetProp(ppl, "PAGE_SUBCOUNTER", sub)' in cs

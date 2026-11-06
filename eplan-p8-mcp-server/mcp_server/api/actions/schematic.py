@@ -77,6 +77,8 @@ import re
 import time
 import uuid
 
+from eplan_connection import TYPED_FAILURES
+
 from ._base import cs_escape
 from . import _project_cache
 from .live import _script
@@ -204,7 +206,20 @@ _HELPERS_SCHEMATIC = r'''
         {
             if (p == null) continue;
             string n = PropText(p, "Name");
-            if (n == wanted) return p;
+            if (n == wanted)
+            {
+                // A page of a project that is not the GUI's current one is
+                // not write-locked by the LockingStep alone: Function.Create
+                // on it throws LockingException. When a target project is
+                // pinned, take the lock explicitly (a no-op if already held;
+                // harmless for a read, the step ends without changes).
+                if ("{{TARGET_PROJECT}}".Length > 0)
+                {
+                    MethodInfo lockObj = MethodByShape(p.GetType(), "LockObject", new string[] { }, false);
+                    if (lockObj != null) { try { lockObj.Invoke(p, null); } catch { } }
+                }
+                return p;
+            }
             if (names.Count < 30 && n != null) names.Add(n);
         }
         throw new Exception("No page named '" + wanted + "' in this project. " +
@@ -246,6 +261,25 @@ _HELPERS_SCHEMATIC = r'''
 
         object loc = TryRead(pl, "Location", absent);
         if (loc != null) d["location"] = PtDict(loc);
+
+        // A wire label (connection definition point) is only useful with what
+        // it says: the duplicate-label check compares these.
+        if (pl.GetType().Name == "ConnectionDefinitionPoint")
+        {
+            try
+            {
+                object cp = GetReadable(pl.GetType(), "Properties").GetValue(pl, null);
+                string[] keys = new string[] { "CONNECTION_DESIGNATION", "CONNECTION_WIRENUMBER", "CONNECTION_WIRECROSSSECTION" };
+                string[] names = new string[] { "designation", "wireNumber", "crossSection" };
+                for (int k = 0; k < keys.Length; k++)
+                {
+                    object v = TryRead(cp, keys[k], null);
+                    string s = v == null ? "" : SafeText(v);
+                    if (!string.IsNullOrEmpty(s)) d[names[k]] = s;
+                }
+            }
+            catch (Exception ex) { absent.Add("Properties (threw: " + Flatten(ex) + ")"); }
+        }
 
         MethodInfo bbox = MethodByShape(pl.GetType(), "GetBoundingBox", new string[] { }, false);
         if (bbox != null)
@@ -374,7 +408,18 @@ _HELPERS_SCHEMATIC = r'''
         {
             if (pl == null) continue;
             string h = Handle(pl);
-            if (h == handle) return pl;
+            if (h == handle)
+            {
+                // Same as FindPage: an object of a pinned, non-current project
+                // needs its write lock taken explicitly before Remove or a
+                // property write (Placement.Remove throws LockingException).
+                if ("{{TARGET_PROJECT}}".Length > 0)
+                {
+                    MethodInfo lockObj = MethodByShape(pl.GetType(), "LockObject", new string[] { }, false);
+                    if (lockObj != null) { try { lockObj.Invoke(pl, null); } catch { } }
+                }
+                return pl;
+            }
             if (present.Count < 20) present.Add(pl.GetType().Name + "=" + h);
         }
         throw new Exception("No placement with handle '" + handle + "' on page '" +
@@ -481,6 +526,10 @@ def _shape(raw, timeout_hint=None):
     """
     if not isinstance(raw, dict):
         return {"success": False, "error": "Unexpected result: %r" % (raw,)}
+    if raw.get("errorType") in TYPED_FAILURES:
+        # Blocked by a dialog, timed out or busy: keep errorType, next_step
+        # and dialogs - flattening them to "error" loses the way out.
+        return dict(raw)
     if not raw.get("success"):
         msg = raw.get("message") or raw.get("error") or "script did not run"
         out = {"success": False, "error": msg}
