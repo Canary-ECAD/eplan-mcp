@@ -41,7 +41,7 @@ def mgr(tmp_path, monkeypatch):
     monkeypatch.setattr(eplan_connection, "_blocking_dialogs", lambda pids, windows=None: [])
     monkeypatch.setattr(eplan_connection, "_responding", lambda pids: True)
     monkeypatch.setattr(eplan_connection, "eplan_pids", lambda: pytest.fail("no tasklist"))
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: pid == 99)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: pid == 99)
     m = EPLANConnectionManager()
     m.connected, m.pid, m.client = True, 99, _Client()
     yield m

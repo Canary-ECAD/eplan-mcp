@@ -2,8 +2,13 @@
 
 The window probes are module functions so tests can replace them."""
 
+import time
+
 
 EPLAN_EXE_NAME = "EPLAN.exe"
+# How long a "did EPLAN die?" check waits out a killed EPLAN's teardown
+# (measured live on EPLAN 2027: gone from the process list within 9 s).
+PID_SETTLE_S = 15.0
 
 
 def eplan_pids() -> list:
@@ -18,10 +23,22 @@ def eplan_pids() -> list:
         return []
 
 
-def pid_alive(pid):
+def pid_alive(pid, settle_s=0.0):
     """True if `pid` is a running EPLAN.exe, False if it is not (exited, or the
     PID now belongs to another program), None if that cannot be told. Checked
-    by process handle, not tasklist, whose failure would read as 'not running'."""
+    by process handle, not tasklist, whose failure would read as 'not running'.
+
+    settle_s: keep asking for up to this long while the answer is None. A killed
+    EPLAN takes seconds to tear down, and answers "access denied" until then."""
+    deadline = time.monotonic() + settle_s
+    while True:
+        alive = _pid_alive_once(pid)
+        if alive is not None or time.monotonic() >= deadline:
+            return alive
+        time.sleep(0.25)
+
+
+def _pid_alive_once(pid):
     try:
         from process_control import WindowsProcess
         WindowsProcess(pid).close()

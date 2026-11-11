@@ -14,6 +14,7 @@ from connection.processes import (
     _blocking_dialogs,
     eplan_listening_ports,
     eplan_state,
+    PID_SETTLE_S,
     pid_alive,
 )
 from connection.runner import RunnerMixin, call_with_timeout
@@ -258,7 +259,7 @@ class EPLANConnectionManager(ClrBootstrapMixin, RunnerMixin, DialogMixin,
             self.connected = False
             return {"alive": False, "message": f"Ping failed: {error}"}
         # A killed EPLAN answers Ping with a plain False, not an error.
-        if not alive and self.pid and self.host in self.LOCAL_HOSTS and pid_alive(self.pid) is False:
+        if not alive and self.pid and self.host in self.LOCAL_HOSTS and pid_alive(self.pid, PID_SETTLE_S) is False:
             self.connected = False
             return {"alive": False, "process_alive": False,
                     "message": f"EPLAN (pid {self.pid}) is no longer running",

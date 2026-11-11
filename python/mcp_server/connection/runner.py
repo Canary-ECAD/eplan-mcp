@@ -13,6 +13,7 @@ from connection.processes import (
     _responding,
     eplan_pids,
     eplan_state,
+    PID_SETTLE_S,
     pid_alive,
 )
 
@@ -293,7 +294,7 @@ class RunnerMixin:
                 timed_out=True, eplan_state=st, in_flight_action=self._inflight)
         # Checked even when the call returned cleanly: measured on EPLAN 2027,
         # ExecuteAction returns without raising when EPLAN is killed under it.
-        if self.pid and self.host in self.LOCAL_HOSTS and pid_alive(self.pid) is False:
+        if self.pid and self.host in self.LOCAL_HOSTS and pid_alive(self.pid, PID_SETTLE_S) is False:
             self.connected = False
             how = f"failed with: {error}" if error is not None else "did not complete"
             return self._typed_failure(

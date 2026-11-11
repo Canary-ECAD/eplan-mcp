@@ -53,7 +53,7 @@ def mgr(tmp_path, monkeypatch):
     monkeypatch.setattr(eplan_connection, "DIALOG_CHECK_S", 0.1)
     monkeypatch.setattr(eplan_connection, "_blocking_dialogs", lambda pids, windows=None: [])
     monkeypatch.setattr(eplan_connection, "eplan_pids", lambda: [99])
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: pid == 99)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: pid == 99)
     m = EPLANConnectionManager()
     m.connected = True
     m.pid = 99
@@ -138,7 +138,7 @@ def test_call_leaked_past_a_reconnect_keeps_the_new_marker(mgr):
 
 def test_exception_with_eplan_gone_is_not_running(mgr, monkeypatch):
     mgr.client.fail = RuntimeError("channel closed")
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: False)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: False)
     result = mgr.execute_action("someAction")
     assert result["errorType"] == "EplanNotRunning"
     assert result["next_step"] == "eplan_app_launch"
@@ -148,7 +148,7 @@ def test_exception_with_eplan_gone_is_not_running(mgr, monkeypatch):
 def test_clean_return_with_eplan_gone_is_not_running(mgr, monkeypatch):
     # Measured on EPLAN 2027: a killed EPLAN lets ExecuteAction return without raising.
     mgr.client.release.set()
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: False)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: False)
     result = mgr.execute_action("someAction")
     assert result["errorType"] == "EplanNotRunning" and "did not complete" in result["error"]
     assert mgr.connected is False
@@ -156,7 +156,7 @@ def test_clean_return_with_eplan_gone_is_not_running(mgr, monkeypatch):
 
 def test_ping_false_with_eplan_gone_says_not_running(mgr, monkeypatch):
     mgr.client.Ping = lambda: False
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: False)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: False)
     result = mgr.ping()
     assert result["alive"] is False and result["process_alive"] is False
     assert "eplan_app_launch" in result["next_step"] and mgr.connected is False
@@ -291,13 +291,13 @@ def test_busy_past_the_timeout_offers_a_way_out(mgr):
 def test_tasklist_failure_does_not_read_as_not_running(mgr, monkeypatch):
     mgr.client.fail = RuntimeError("boom")
     monkeypatch.setattr(eplan_connection, "eplan_pids", lambda: [])   # tasklist failed
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: None)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: None)
     result = mgr.execute_action("someAction")
     assert result.get("errorType") != "EplanNotRunning" and mgr.connected is True
 
 
 def test_stale_pid_is_not_scanned_for_dialogs(mgr, monkeypatch):
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: False)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: False)
     monkeypatch.setattr(eplan_connection, "eplan_pids", lambda: [7])
     assert mgr._watch_pids() == {7}
 

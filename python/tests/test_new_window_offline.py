@@ -40,7 +40,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(eplan_connection, "DIALOG_CHECK_S", 0.1)
     monkeypatch.setattr(eplan_connection, "_blocking_dialogs", lambda pids, windows=None: [])
     monkeypatch.setattr(eplan_connection, "_responding", lambda pids: True)
-    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid: pid == 99)
+    monkeypatch.setattr(eplan_connection, "pid_alive", lambda pid, *_: pid == 99)
     state = {"windows": []}
     monkeypatch.setattr(eplan_connection, "_eplan_windows",
                         lambda pids, full=False, new_since=None: list(state["windows"]))

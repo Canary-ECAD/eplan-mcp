@@ -165,3 +165,13 @@ def test_killed_eplan_held_open_elsewhere_reads_as_exited(monkeypatch, winerror)
     assert processes.pid_alive(456) is None  # still listed: really unknown
     control.process_ids.side_effect = OSError("snapshot failed")
     assert processes.pid_alive(123) is None
+
+
+def test_pid_alive_waits_out_a_teardown(monkeypatch):
+    from connection import processes
+    answers = iter([None, None, False])
+    monkeypatch.setattr(processes, "_pid_alive_once", lambda pid: next(answers))
+    monkeypatch.setattr(processes.time, "sleep", lambda s: None)
+    assert processes.pid_alive(123, settle_s=5) is False
+    monkeypatch.setattr(processes, "_pid_alive_once", lambda pid: None)
+    assert processes.pid_alive(123) is None  # no settle: one look only
