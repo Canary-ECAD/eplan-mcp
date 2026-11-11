@@ -399,3 +399,28 @@ def test_port_fallback_reads_the_version_from_eplan_exe(monkeypatch):
     assert m.connect()["success"] is True
     assert (m.port, m.pid, m.server_version) == ("49153", 4242, "2027.0.3")
     assert m.eplan_major() == 2027
+
+
+def test_server_enumeration_reads_the_out_parameter_from_the_result(monkeypatch):
+    server = types.SimpleNamespace(EplanVersion="2027.0.3.27481", EplanVariant="Electric P8",
+                                   ServerPort=49153)
+
+    class _Remote:
+        def GetActiveEplanServersOnLocalMachine(self, passed):
+            return [server]          # pythonnet: the out value comes back; `passed` stays empty
+
+        def Dispose(self):
+            pass
+
+    class _List:
+        def __getitem__(self, _type):
+            return list
+
+    monkeypatch.setitem(sys.modules, "Eplan.EplApi.RemoteClient", types.SimpleNamespace(
+        EplanRemoteClient=_Remote, EplanServerData=object))
+    monkeypatch.setitem(sys.modules, "System.Collections.Generic",
+                        types.SimpleNamespace(List=_List()))
+    m = EPLANConnectionManager()
+    m._clr_initialized = True
+    assert m.get_active_servers() == [
+        {"version": "2027.0.3.27481", "variant": "Electric P8", "port": "49153"}]

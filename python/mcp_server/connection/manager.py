@@ -75,17 +75,18 @@ class EPLANConnectionManager(ClrBootstrapMixin, RunnerMixin, DialogMixin,
             from System.Collections.Generic import List as NetList
 
             temp = EplanRemoteClient()
-            # out parameter in pythonnet
-            servers = NetList[EplanServerData]()
-            _, timed_out, err = call_with_timeout(
-                temp.GetActiveEplanServersOnLocalMachine, 10, servers)
+            # pythonnet returns an out parameter as the call's result and leaves
+            # the list passed in empty (measured on EPLAN 2027).
+            returned, timed_out, err = call_with_timeout(
+                temp.GetActiveEplanServersOnLocalMachine, 10, NetList[EplanServerData]())
             if err is not None:
                 raise err
             if timed_out:
                 raise TimeoutError("server enumeration did not answer within 10s")
 
+            servers = returned[-1] if isinstance(returned, tuple) else returned
             result = []
-            for s in servers:
+            for s in servers or []:
                 result.append({
                     "version": str(s.EplanVersion),
                     "variant": str(s.EplanVariant),
