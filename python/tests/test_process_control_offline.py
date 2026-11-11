@@ -154,3 +154,14 @@ def test_file_version_of_a_file_without_one_is_none(tmp_path):
     path = tmp_path / "plain.txt"
     path.write_text("x")
     assert control.file_version(str(path)) is None
+
+
+@pytest.mark.parametrize("winerror", [5, 31])
+def test_killed_eplan_held_open_elsewhere_reads_as_exited(monkeypatch, winerror):
+    from connection import processes
+    monkeypatch.setattr(control, "WindowsProcess", Mock(side_effect=OSError(None, "x", None, winerror)))
+    monkeypatch.setattr(control, "process_ids", Mock(return_value=[456]))
+    assert processes.pid_alive(123) is False
+    assert processes.pid_alive(456) is None  # still listed: really unknown
+    control.process_ids.side_effect = OSError("snapshot failed")
+    assert processes.pid_alive(123) is None

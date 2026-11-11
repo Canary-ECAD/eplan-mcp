@@ -28,8 +28,16 @@ def pid_alive(pid):
         return True
     except RuntimeError:            # not EPLAN.exe, or already exited
         return False
-    except OSError as e:            # 87: no such process; access denied etc.: unknown
-        return False if getattr(e, "winerror", None) == 87 else None
+    except OSError as e:            # 87: no such process
+        if getattr(e, "winerror", None) == 87:
+            return False
+        # A just-killed EPLAN still held open elsewhere answers "access denied"
+        # (5) or WinError 31; the process snapshot already leaves it out.
+        try:
+            from process_control import process_ids
+            return False if pid not in process_ids(EPLAN_EXE_NAME) else None
+        except Exception:
+            return None
     except Exception:
         return None
 
