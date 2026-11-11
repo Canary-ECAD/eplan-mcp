@@ -372,3 +372,30 @@ def test_next_step_picks_a_safe_button_in_any_language(tmp_path, monkeypatch):
 def test_a_window_hint_wins_over_the_button_advice(monkeypatch):
     monkeypatch.setitem(eplan_connection.WINDOW_HINTS, (5, "Data Portal"), "Ask the user.")
     assert EPLANConnectionManager._dialog_next_step({"hwnd": 5, "title": "Data Portal"}) == "Ask the user."
+
+
+def test_port_fallback_reads_the_version_from_eplan_exe(monkeypatch):
+    import process_control
+
+    class _Remote:
+        def Connect(self, host, port, timeout):
+            pass
+
+        def Ping(self):
+            return True
+
+    monkeypatch.setitem(sys.modules, "Eplan.EplApi.RemoteClient",
+                        types.SimpleNamespace(EplanRemoteClient=_Remote))
+    monkeypatch.setitem(sys.modules, "System", types.SimpleNamespace(
+        TimeSpan=types.SimpleNamespace(FromSeconds=lambda s: s)))
+    monkeypatch.setattr(process_control, "_listener_pid", lambda port: 4242)
+    monkeypatch.setattr(process_control, "eplan_version",
+                        lambda pid: "2027.0.3" if pid == 4242 else None)
+    m = EPLANConnectionManager()
+    m._clr_initialized = True
+    monkeypatch.setattr(m, "get_active_servers", lambda: [])
+    import connection.manager as manager_module
+    monkeypatch.setattr(manager_module, "eplan_listening_ports", lambda: ["49153"])
+    assert m.connect()["success"] is True
+    assert (m.port, m.pid, m.server_version) == ("49153", 4242, "2027.0.3")
+    assert m.eplan_major() == 2027

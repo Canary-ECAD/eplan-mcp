@@ -43,8 +43,9 @@ class EPLANConnectionManager(ClrBootstrapMixin, RunnerMixin, DialogMixin,
         self.connected = False
         self.pid = None         # EPLAN.exe behind the connection, when local
         # The connected EPLAN's own version, as server enumeration reported it
-        # (e.g. "2027.0.3"). None when the port was given or enumeration was
-        # empty; target_version (the loaded DLLs) is the fallback then.
+        # (e.g. "2027.0.3"), else the local listener's EPLAN.exe file version.
+        # None when neither is known; target_version (the loaded DLLs) is the
+        # fallback then.
         self.server_version = None
         self._inflight = None   # action string of a call still stuck in EPLAN
         self._inflight_since = 0.0
@@ -163,8 +164,12 @@ class EPLANConnectionManager(ClrBootstrapMixin, RunnerMixin, DialogMixin,
                         self.server_version = server_version
                         if host in self.LOCAL_HOSTS:
                             try:
-                                from process_control import _listener_pid
+                                from process_control import _listener_pid, eplan_version
                                 self.pid = _listener_pid(candidate)
+                                # Enumeration was empty or the port was given:
+                                # take the version from the listener's EPLAN.exe.
+                                if not self.server_version:
+                                    self.server_version = eplan_version(self.pid)
                             except Exception:
                                 pass
                         keep = True

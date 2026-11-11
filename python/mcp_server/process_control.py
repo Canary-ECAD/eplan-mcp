@@ -121,6 +121,32 @@ def _listener_pid(port):
     return owners.pop()
 
 
+def file_version(path):
+    """major.minor.build of an executable's fixed version info ("2027.0.3"), or None."""
+    api = ctypes.WinDLL("version")
+    size = api.GetFileVersionInfoSizeW(path, None)
+    if not size:
+        return None
+    data = ctypes.create_string_buffer(size)
+    if not api.GetFileVersionInfoW(path, 0, size, data):
+        return None
+    info, length = ctypes.c_void_p(), wintypes.UINT()
+    if not api.VerQueryValueW(data, "\\", ctypes.byref(info), ctypes.byref(length)) or length.value < 16:
+        return None
+    # VS_FIXEDFILEINFO: signature, struc version, then dwFileVersionMS / LS.
+    _sig, _struc, ms, ls = (ctypes.c_uint32 * 4).from_address(info.value)
+    return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}"
+
+
+def eplan_version(pid):
+    """Version of the EPLAN.exe running as `pid`, read from its file."""
+    process = WindowsProcess(pid)
+    try:
+        return file_version(process.path)
+    finally:
+        process.close()
+
+
 class WindowsProcess:
     """A retained kernel handle identifies the process even after its PID is reused."""
 
@@ -149,6 +175,7 @@ class WindowsProcess:
             path = ctypes.create_unicode_buffer(size.value)
             if not self._api.QueryFullProcessImageNameW(self._handle, 0, path, ctypes.byref(size)):
                 raise ctypes.WinError(ctypes.get_last_error())
+            self.path = path.value
             if ntpath.basename(path.value).lower() != "eplan.exe":
                 raise RuntimeError("The listening process is not EPLAN.exe.")
             if self.wait(0):
