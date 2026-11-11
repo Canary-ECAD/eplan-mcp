@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The script host without an EPLAN window (EPLAN's "offline application"). Long-lived: started
+       once by the server, serves a queue folder, exits on "stop" or after being idle. Per EPLAN's
+       rules the exe itself references only the Starter library; everything EPLAN-bound sits in
+       EplanMcp.Scripting and is touched only after PinToEplan. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>EplanMcp.Host.Offline</RootNamespace>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\offline\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
+    <ProjectReference Include="..\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
+    <Reference Include="Eplan.EplApi.StarterNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.StarterNetu.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EplanBinPath</_Parameter1>
+      <_Parameter2>$(EplanBinPath)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

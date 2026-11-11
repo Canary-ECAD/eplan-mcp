@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The EPLAN side of the script host: ScriptContext, project resolution, the write gate and the
+       entry points the add-in action and the script bootstrap call. Needs an installed EPLAN to
+       build (the API assemblies are referenced in place and never copied). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>EplanMcp.Scripting</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- EPLAN's *Netu assemblies are compiled against WindowsDesktop; without it MSBuild cannot
+         unify WindowsBase / System.Drawing (MSB3277). EPLAN's process loads it either way. -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <ProjectReference Include="..\EplanMcp.Scripting.Core\EplanMcp.Scripting.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Eplan.EplApi.AFNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.AFNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.BaseNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.BaseNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.DataModelNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.DataModelNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.HEServicesNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.HEServicesNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.SystemNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.SystemNetu.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Bootstrap\bootstrap.cs.template" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

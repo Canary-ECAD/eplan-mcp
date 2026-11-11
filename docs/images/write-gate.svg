@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" width="860" height="470" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="13" fill="#1f2328">
+  <title>Write gate</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <rect width="860" height="470" fill="#ffffff"/>
+
+  <rect x="240" y="14" width="380" height="46" rx="8" fill="#f6f8fa" stroke="#57606a"/>
+  <text x="430" y="35" text-anchor="middle" font-weight="600">Script declares // @writes true</text>
+  <text x="430" y="52" text-anchor="middle" font-size="11" fill="#57606a">without it, EPLAN writes fail at compile time (EMCP002)</text>
+  <line x1="430" y1="60" x2="430" y2="84" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="230" y="86" width="400" height="46" rx="8" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="430" y="107" text-anchor="middle" font-weight="600">Is the TARGET project a scratch clone?</text>
+  <text x="430" y="124" text-anchor="middle" font-size="11" fill="#57606a">marker file &lt;project&gt;.elk.eplanmcp-scratch beside the .elk</text>
+
+  <path d="M330,132 V162 H190 V182" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="250" y="156" font-size="12" fill="#1a7f37" font-weight="600">yes</text>
+  <path d="M530,132 V162 H630 V182" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="570" y="156" font-size="12" fill="#cf222e" font-weight="600">no: real project</text>
+
+  <rect x="40" y="184" width="300" height="140" rx="8" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="190" y="208" text-anchor="middle" font-weight="600">Scratch clone</text>
+  <text x="56" y="234">Ad-hoc code or a library script</text>
+  <text x="56" y="256">Touches ctx.Project only (EMCP004)</text>
+  <text x="56" y="278">Locks each object with ctx.Lock</text>
+  <text x="56" y="300">One undo step per run</text>
+  <text x="190" y="346" text-anchor="middle" font-weight="600" fill="#1a7f37">Write runs</text>
+
+  <rect x="430" y="184" width="400" height="200" rx="8" fill="#ffebe9" stroke="#cf222e"/>
+  <text x="630" y="208" text-anchor="middle" font-weight="600">Real project: ALL five, or refused</text>
+  <text x="446" y="236">1  EPLAN_MCP_ALLOW_REAL_PROJECT_WRITES=1</text>
+  <text x="466" y="252" font-size="11" fill="#57606a">set by a person in the server's environment</text>
+  <text x="446" y="276">2  A saved library script (no ad-hoc code)</text>
+  <text x="446" y="300">3  allow_real_project=True</text>
+  <text x="446" y="324">4  Arguments sent canonical (args_canonical)</text>
+  <text x="446" y="348">5  confirm = confirm_code of a compile_only run</text>
+  <text x="466" y="364" font-size="11" fill="#57606a">same script, args, helpers, project, dry_run; user approved</text>
+  <text x="630" y="406" text-anchor="middle" font-weight="600" fill="#cf222e">Write runs, audit record required</text>
+  <text x="630" y="426" text-anchor="middle" font-size="12" fill="#57606a">Take a backup first (eplan_backup_project).</text>
+
+  <text x="430" y="456" text-anchor="middle" font-size="12" fill="#57606a">A guard against mistakes, not a sandbox: a script is C# running in EPLAN.</text>
+</svg>

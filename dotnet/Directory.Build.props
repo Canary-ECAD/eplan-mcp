@@ -1,0 +1,19 @@
+<Project>
+  <!-- Shared settings for every EplanMcp project. EPLAN's API assemblies are proprietary and are
+       never committed or redistributed: EPLAN-bound projects reference them from an installed
+       EPLAN. Override the location with -p:EplanBinPath=... or -p:EplanVersion=... -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!-- Semver of the script host core. Bump with every change to the request/result contract or
+         ScriptContext; the Python server reads it back through EplanMcp_Hello. -->
+    <Version>0.2.1</Version>
+
+    <EplanVersion Condition="'$(EplanVersion)' == ''">2027.0.3</EplanVersion>
+    <EplanBinPath Condition="'$(EplanBinPath)' == ''">$(ProgramW6432)\EPLAN\Platform\$(EplanVersion)\Bin</EplanBinPath>
+  </PropertyGroup>
+</Project>

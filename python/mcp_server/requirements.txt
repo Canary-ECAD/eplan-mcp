@@ -1,0 +1,13 @@
+# EPLAN MCP Server Dependencies
+
+# MCP SDK. Floor = the version the tool annotations, resources and tests were verified on
+# (tool(annotations=...) and resource templates); <2 until the 2.x API is checked.
+mcp>=1.30.0,<2
+
+# .NET interop for EPLAN API
+pythonnet>=3.0.0
+
+# Asset Administration Shell (aas_* tools): AAS metamodel V3 + AASX packaging
+basyx-python-sdk>=2.0.1
+
+

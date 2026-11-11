@@ -23,12 +23,12 @@ AI 지원 자동화입니다.
 
 ```
 .
-└── eplan-p8-mcp-server/          # 로컬: EPLAN P8을 제어하는 MCP 서버
+└── python/                       # 로컬: EPLAN P8을 제어하는 MCP 서버
 ```
 
 | 구성 요소 | 유형 | 용도 | EPLAN 제품 |
 |---|---|---|---|
-| `eplan-p8-mcp-server/` | 로컬 Python MCP | Claude에서 실행 중인 EPLAN 제어: 프로젝트 열기/닫기, 내보내기, 보고서, 스크립트 | EPLAN Electric P8 |
+| `python/` | 로컬 Python MCP | Claude에서 실행 중인 EPLAN 제어: 프로젝트 열기/닫기, 내보내기, 보고서, 스크립트 | EPLAN Electric P8 |
 | [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | 원격 Cloudflare Workers, 별도 저장소 | P8 2026, P8 2027, EEC Pro 문서를 MCP와 REST로 제공 | EPLAN Electric P8 및 EEC Pro |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Claude Code 스킬, 별도 저장소 | Claude가 올바른 EPLAN 스크립트, API 코드, Remote Client 앱을 작성하도록 가르침 | EPLAN Electric P8 |
 
@@ -45,15 +45,17 @@ AI 지원 자동화입니다.
 ### 로컬 EPLAN 자동화(P8)
 
 ```bash
-pip install pythonnet "mcp<2"
-claude mcp add eplan -- python 사용자경로/eplan-p8-mcp-server/mcp_server/server.py
-claude mcp list   # "eplan"이 보여야 합니다
+python YOURPATH/python/install.py   # own .venv + registers "eplan"
+claude mcp list   # "eplan"이 표시되어야 함
 ```
 
-그런 다음 EPLAN을 실행하고 Claude Code를 열어 `connect to eplan`이라고 말하세요. 전체 가이드는
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md)에 있습니다.
+그다음 EPLAN을 실행하고 Claude Code를 열어 `connect to eplan`이라고 요청하세요. 전체 안내는 [`python/mcp_server/README.md`](python/mcp_server/README.md)에 있습니다.
 
 ![설정된 Claude CLI](assets/claude-cli-configured.png)
+
+**Script host:** typed C# inside EPLAN, in three runtimes (add-in, bootstrap, offline). Guide in English: [`dotnet/SCRIPTING.md`](dotnet/SCRIPTING.md).
+
+![Script host architecture](docs/images/script-host-architecture.svg)
 
 #### 사전 요구 사항
 
@@ -98,7 +100,7 @@ claude mcp list   # "eplan"이 보여야 합니다
 각 도구는 자신이 하는 일을 밝혀, 클라이언트가 언제 사용자에게 먼저 물어볼지 정할 수 있게 합니다. 네 가지
 표준 MCP 주석(`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`)과 함께, `_meta`의 `canary-ecad/eplan` 키 아래에 EPLAN 사실 `changesProject`, `runsCode`, `changesEplan`, `projectArgument`(열린 프로젝트
 변경, 코드 실행, EPLAN 자체 변경, 프로젝트를 지정하는 인수)를 담습니다. 이는 정책이 아니라 사실입니다. 표는
-[`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py)에 있고 [`tools.json`](eplan-p8-mcp-server/tools.json)가 공개 사본입니다. 각 릴리스(태그 `vX.Y.Z`)에는 `tools.json`이 첨부되며 추가, 제거,
+[`mcp_server/tool_annotations.py`](python/mcp_server/tool_annotations.py)에 있고 [`tools.json`](python/tools.json)가 공개 사본입니다. 각 릴리스(태그 `vX.Y.Z`)에는 `tools.json`이 첨부되며 추가, 제거,
 재주석된 도구가 나열됩니다.
 
 #### Discovery 모드
@@ -111,7 +113,7 @@ claude mcp list   # "eplan"이 보여야 합니다
 이름 목록을 보내고 스키마는 필요할 때 가져옵니다). 따라서 `full` 모드의 199개 도구도 `discovery`의
 13개와 비용이 거의 같고, 검색 → 설명 → 호출 단계를 더 얹으면 왕복만 한 번 늘어납니다. 장단점과
 측정값은
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md#discovery-mode-eplan_mcp_mode)에
+[`python/mcp_server/README.md`](python/mcp_server/README.md#discovery-mode-eplan_mcp_mode)에
 있습니다.
 
 ### 원격 문서 RAG(P8, EEC Pro, 2027)
@@ -174,12 +176,12 @@ GitHub Actions로 실행됩니다.
 #### 이 MCP 서버에서 사용하기
 
 바로 쓸 수 있는 확장이
-[`eplan-p8-mcp-server/extensions/symbol_search.py`](./eplan-p8-mcp-server/extensions/symbol_search.py)에
+[`python/extensions/symbol_search.py`](./python/extensions/symbol_search.py)에
 있습니다. 활성화하면 에이전트에 `eplan_symbol_search` 도구가 생깁니다.
 
 ```powershell
 pip install sentence-transformers pillow requests
-set EPLAN_MCP_EXTENSIONS=<repo>\eplan-p8-mcp-server\extensions
+set EPLAN_MCP_EXTENSIONS=<repo>\python\extensions
 ```
 
 그러면 잘라낸 심볼 이미지를 주었을 때 Claude가
@@ -217,7 +219,7 @@ MCP 서버는 Claude가 EPLAN에서 *행동*하게 합니다.
 
 ### 1. 작업 구현
 
-`eplan-p8-mcp-server/mcp_server/api/actions/<모듈이름>.py`에서:
+`python/mcp_server/api/actions/<모듈이름>.py`에서:
 
 ```python
 def open_project(project_path: str, open_mode: str = None) -> dict:
@@ -236,7 +238,7 @@ def open_project(project_path: str, open_mode: str = None) -> dict:
 
 ### 2. 내보내기
 
-`eplan-p8-mcp-server/mcp_server/api/actions/__init__.py`의 import **와** `__all__`에 함수를
+`python/mcp_server/api/actions/__init__.py`의 import **와** `__all__`에 함수를
 추가하세요. 그러면 `eplan_open_project`로 자동 등록됩니다.
 
 ### 3. MCP 서버 재시작
@@ -245,11 +247,11 @@ Claude 또는 서버를 다시 시작하면 새 도구를 사용할 수 있습�
 
 ### 4. 공식 문서로 검증(선택 사항)
 
-`eplan-p8-mcp-server/tools/validate_actions.py`는 래퍼에 선언된 모든 작업 이름과 매개변수를
+`python/tools/validate_actions.py`는 래퍼에 선언된 모든 작업 이름과 매개변수를
 공식 EPLAN 문서 RAG와 대조하고 markdown 보고서를 작성합니다.
 
 ```bash
-python eplan-p8-mcp-server/tools/validate_actions.py
+python python/tools/validate_actions.py
 ```
 
 ![EPLAN 테스트](assets/eplan-test.png)

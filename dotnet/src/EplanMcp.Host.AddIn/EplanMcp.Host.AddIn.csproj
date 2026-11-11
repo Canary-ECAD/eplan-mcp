@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The EPLAN add-in host: actions EplanMcp_RunScript and EplanMcp_Hello. No ribbon, no dialogs.
+       Its output folder is also what the script bootstrap loads from (see eplanmcp-manifest.txt). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>EplanMcp.Host.AddIn</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\host\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
+    <ProjectReference Include="..\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
+    <!-- Use the Roslyn EPLAN ships; never put a second copy beside the add-in. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Eplan.EplApi.AFNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.AFNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.BaseNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.BaseNetu.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- The bootstrap loads exactly these files, in this order, and checks each hash. -->
+  <Target Name="WriteHostManifest" AfterTargets="Build">
+    <ItemGroup>
+      <_HostFile Include="$(OutDir)EplanMcp.Contracts.dll" />
+      <_HostFile Include="$(OutDir)EplanMcp.Scripting.Core.dll" />
+      <_HostFile Include="$(OutDir)EplanMcp.Scripting.dll" />
+      <_HostFile Include="$(OutDir)EplanMcp.Eplan.dll" />
+    </ItemGroup>
+    <GetFileHash Files="@(_HostFile)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_HostHash" />
+    </GetFileHash>
+    <WriteLinesToFile File="$(OutDir)eplanmcp-manifest.txt" Overwrite="true"
+      Lines="# EplanMcp host $(Version) - SHA-256 and file, in load order;@(_HostHash->'%(FileHash) %(Filename)%(Extension)')" />
+    <WriteLinesToFile File="$(OutDir)eplanmcp-version.txt" Overwrite="true" Lines="$(Version)" />
+  </Target>
+</Project>

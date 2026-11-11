@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile-checks scripts (with their helper libraries) against an installed EPLAN's API, the
+       way the script host would, without starting EPLAN. For CI on a machine with EPLAN and for
+       extension packs: exit code 0 = every script compiles and passes the safety check. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>EplanMcp.ScriptCheck</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <ProjectReference Include="..\..\src\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
+    <ProjectReference Include="..\..\src\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EplanBinPath</_Parameter1>
+      <_Parameter2>$(EplanBinPath)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
