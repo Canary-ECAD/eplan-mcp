@@ -886,6 +886,12 @@ def script_status(run_id: str) -> dict:
                 "note": ("No heartbeat yet: the script has not called ctx.Budget.Check() or "
                          "ctx.Progress(), or EPLAN is busy." if age is None else None)}
     result = _read_json(job["result_path"])
+    call = job["call"] if isinstance(job["call"], dict) else {}
+    if result is None and call.get("errorType"):
+        # A typed failure (EplanNotRunning, EplanBlockedByDialog ...) says more than "no result".
+        return {"success": False, "state": "failed", "run_id": run_id, "runtime": job["runtime"],
+                "action_result": call, "errorType": call["errorType"],
+                "error": call.get("error") or call.get("message"), "next_step": call.get("next_step")}
     if result is None:
         return {"success": False, "state": "failed", "run_id": run_id, "runtime": job["runtime"],
                 "action_result": job["call"],

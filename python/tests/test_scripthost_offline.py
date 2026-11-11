@@ -518,3 +518,18 @@ def test_host_version_matches_the_dotnet_build_version():
     import re
     props = open(os.path.join(scripthost.DOTNET_DIR, "Directory.Build.props"), encoding="utf-8").read()
     assert re.search(r"<Version>([^<]+)</Version>", props).group(1) == scripthost.HOST_VERSION
+
+
+def test_eplan_dying_under_a_run_keeps_its_typed_failure(host, monkeypatch):
+    class Dies(FakeManager):
+        def execute_action(self, action, quiet_mode=True, **kwargs):
+            if action.startswith("EplanMcp_RunScript"):
+                return {"success": False, "errorType": "EplanNotRunning",
+                        "error": "EPLAN (pid 7) is no longer running; the call did not complete",
+                        "next_step": "eplan_app_launch"}
+            return super().execute_action(action, quiet_mode, **kwargs)
+
+    use(monkeypatch, Dies())
+    out = scripthost.script_run(code="return 1;")
+    assert out["success"] is False and out["errorType"] == "EplanNotRunning"
+    assert out["next_step"] == "eplan_app_launch"
