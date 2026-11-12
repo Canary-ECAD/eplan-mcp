@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Needs an installed EPLAN (its API assemblies are read as metadata; EPLAN is never started).
+       Not part of the EPLAN-free CI filter. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\..\src\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
+    <ProjectReference Include="..\..\src\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EplanBinPath</_Parameter1>
+      <_Parameter2>$(EplanBinPath)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

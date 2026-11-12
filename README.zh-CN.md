@@ -21,12 +21,12 @@
 
 ```
 .
-└── eplan-p8-mcp-server/          # 本地：控制 EPLAN P8 的 MCP 服务器
+└── python/                       # 本地：控制 EPLAN P8 的 MCP 服务器
 ```
 
 | 组件 | 类型 | 用途 | EPLAN 产品 |
 |---|---|---|---|
-| `eplan-p8-mcp-server/` | 本地 Python MCP | 从 Claude 操控正在运行的 EPLAN：打开/关闭项目、导出、报表、脚本 | EPLAN Electric P8 |
+| `python/` | 本地 Python MCP | 从 Claude 操控正在运行的 EPLAN：打开/关闭项目、导出、报表、脚本 | EPLAN Electric P8 |
 | [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | 远程 Cloudflare Workers，独立仓库 | 通过 MCP 和 REST 提供 P8 2026、P8 2027 与 EEC Pro 文档 | EPLAN Electric P8 与 EEC Pro |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Claude Code Skill，独立仓库 | 教 Claude 写出正确的 EPLAN 脚本、API 代码和 Remote Client 应用 | EPLAN Electric P8 |
 
@@ -42,15 +42,18 @@
 ### 本地 EPLAN 自动化（P8）
 
 ```bash
-pip install pythonnet "mcp<2"
-claude mcp add eplan -- python 你的路径/eplan-p8-mcp-server/mcp_server/server.py
-claude mcp list   # 应列出 "eplan"
+python YOURPATH/python/install.py   # own .venv + registers "eplan"
+claude mcp list   # 应当能列出 "eplan"
 ```
 
-然后启动 EPLAN，打开 Claude Code，说 `connect to eplan`。完整指南见
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md)。
+随后启动 EPLAN，打开 Claude Code，并输入 `connect to eplan`。完整指南见
+[`python/mcp_server/README.md`](python/mcp_server/README.md)。
 
 ![已配置的 Claude CLI](assets/claude-cli-configured.png)
+
+**Script host:** typed C# inside EPLAN, in three runtimes (add-in, bootstrap, offline). Guide in English: [`dotnet/SCRIPTING.md`](dotnet/SCRIPTING.md).
+
+![Script host architecture](docs/images/script-host-architecture.svg)
 
 #### 使用前提
 
@@ -93,7 +96,7 @@ claude mcp list   # 应列出 "eplan"
 
 每个工具都会说明自己做什么，以便客户端决定何时先询问用户：它带有四个标准 MCP 注解（`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`），
 并在 `_meta` 的 `canary-ecad/eplan` 键下给出 EPLAN 事实 `changesProject`, `runsCode`, `changesEplan`, `projectArgument`（是否写入当前项目、是否运行代码、
-是否修改 EPLAN 本身、哪个参数指定项目）。这些是事实而非策略：表格位于 [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py)，[`tools.json`](eplan-p8-mcp-server/tools.json) 是公开副本。
+是否修改 EPLAN 本身、哪个参数指定项目）。这些是事实而非策略：表格位于 [`mcp_server/tool_annotations.py`](python/mcp_server/tool_annotations.py)，[`tools.json`](python/tools.json) 是公开副本。
 每个版本（标签 `vX.Y.Z`）都会附上 `tools.json`，并列出新增、删除或重新注解的工具。
 
 #### Discovery 模式
@@ -104,7 +107,7 @@ token 的工具列表。对于每次请求都发送全部工具完整 schema 的
 **在 Claude Code 中不要使用。** Claude Code 本身已经会延迟加载工具 schema——先给出名称列表，
 需要时再获取 schema——因此 `full` 模式的 199 个工具在其中的开销与 `discovery` 的 13 个相差无几，
 再叠加"搜索 → 描述 → 调用"的间接层只会多一次往返。取舍分析和测量数据见
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md#discovery-mode-eplan_mcp_mode)。
+[`python/mcp_server/README.md`](python/mcp_server/README.md#discovery-mode-eplan_mcp_mode)。
 
 ### 远程文档 RAG（P8、EEC Pro、2027）
 
@@ -165,12 +168,12 @@ curl -X POST https://symbols.covaga.xyz/query -H "Content-Type: application/json
 #### 在本 MCP 服务器中使用
 
 现成的扩展位于
-[`eplan-p8-mcp-server/extensions/symbol_search.py`](./eplan-p8-mcp-server/extensions/symbol_search.py)。
+[`python/extensions/symbol_search.py`](./python/extensions/symbol_search.py)。
 启用后，智能体会获得 `eplan_symbol_search` 工具：
 
 ```powershell
 pip install sentence-transformers pillow requests
-set EPLAN_MCP_EXTENSIONS=<repo>\eplan-p8-mcp-server\extensions
+set EPLAN_MCP_EXTENSIONS=<repo>\python\extensions
 ```
 
 之后给出一张裁剪好的符号图像，Claude 会调用
@@ -206,7 +209,7 @@ dispose 规范、EPLAN 2025 的远程访问变更。
 
 ### 1. 实现该操作
 
-在 `eplan-p8-mcp-server/mcp_server/api/actions/<你的模块>.py` 中：
+在 `python/mcp_server/api/actions/<你的模块>.py` 中：
 
 ```python
 def open_project(project_path: str, open_mode: str = None) -> dict:
@@ -225,7 +228,7 @@ def open_project(project_path: str, open_mode: str = None) -> dict:
 
 ### 2. 导出它
 
-把函数加入 `eplan-p8-mcp-server/mcp_server/api/actions/__init__.py` 的 import **和** `__all__`。
+把函数加入 `python/mcp_server/api/actions/__init__.py` 的 import **和** `__all__`。
 它随后会自动注册为 `eplan_open_project`。
 
 ### 3. 重启 MCP 服务器
@@ -234,11 +237,11 @@ Claude 或服务器重启后，新工具即可使用。
 
 ### 4. 对照官方文档校验（可选）
 
-`eplan-p8-mcp-server/tools/validate_actions.py` 会将封装中声明的每个操作名称和参数与官方 EPLAN
+`python/tools/validate_actions.py` 会将封装中声明的每个操作名称和参数与官方 EPLAN
 文档 RAG 进行比对，并生成 markdown 报告：
 
 ```bash
-python eplan-p8-mcp-server/tools/validate_actions.py
+python python/tools/validate_actions.py
 ```
 
 ![EPLAN 测试](assets/eplan-test.png)

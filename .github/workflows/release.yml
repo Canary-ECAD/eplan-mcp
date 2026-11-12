@@ -27,19 +27,22 @@ jobs:
           python-version: "3.12"
           architecture: x64
       - name: Install
-        run: python -m pip install -r eplan-p8-mcp-server/mcp_server/requirements.txt pytest
+        run: python -m pip install -r python/mcp_server/requirements.txt pytest
       - name: Tests
-        working-directory: eplan-p8-mcp-server
+        working-directory: python
         run: python -m pytest -q -m "not live"
       - name: tools.json is up to date
-        run: python eplan-p8-mcp-server/tools/dump_tools.py --check
+        run: python python/tools/dump_tools.py --check
       - name: Notes
         run: |
           previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
           if [ -n "$previous" ]; then
-            git show "$previous:eplan-p8-mcp-server/tools.json" > previous-tools.json 2>/dev/null || true
+            # Tags before the folder rename keep tools.json under the old folder.
+            git show "$previous:python/tools.json" > previous-tools.json 2>/dev/null \
+              || git show "$previous:eplan-p8-mcp-server/tools.json" > previous-tools.json 2>/dev/null \
+              || true
           fi
-          python eplan-p8-mcp-server/tools/release_notes.py previous-tools.json eplan-p8-mcp-server/tools.json > notes.md
+          python python/tools/release_notes.py previous-tools.json python/tools.json > notes.md
           if [ -n "$previous" ]; then
             echo "" >> notes.md
             echo "Full diff: https://github.com/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_REF_NAME" >> notes.md
@@ -49,5 +52,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" eplan-p8-mcp-server/tools.json \
+          gh release create "$GITHUB_REF_NAME" python/tools.json \
             --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

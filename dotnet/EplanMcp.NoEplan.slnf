@@ -1,0 +1,10 @@
+{
+  "solution": {
+    "path": "EplanMcp.sln",
+    "projects": [
+      "src\\EplanMcp.Contracts\\EplanMcp.Contracts.csproj",
+      "src\\EplanMcp.Scripting.Core\\EplanMcp.Scripting.Core.csproj",
+      "tests\\EplanMcp.Scripting.Core.Tests\\EplanMcp.Scripting.Core.Tests.csproj"
+    ]
+  }
+}

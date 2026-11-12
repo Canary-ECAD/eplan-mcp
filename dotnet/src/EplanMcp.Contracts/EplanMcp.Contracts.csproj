@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The wire contract between the Python server and every script runtime. Plain data only, no
+       EPLAN and no serializer dependency, so it loads in any runtime. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>EplanMcp.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,27 @@
+<Project>
+  <!-- Shared settings for every EplanMcp project. EPLAN's API assemblies are proprietary and are
+       never committed or redistributed: EPLAN-bound projects reference them from an installed
+       EPLAN. Override the location with -p:EplanBinPath=... or -p:EplanVersion=... -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!-- Semver of the script host core. Bump with every change to the request/result contract or
+         ScriptContext; the Python server reads it back through EplanMcp_Hello. -->
+    <Version>0.2.1</Version>
+
+    <EplanVersion Condition="'$(EplanVersion)' == ''">2027.0.3</EplanVersion>
+    <EplanBinPath Condition="'$(EplanBinPath)' == ''">$(ProgramW6432)\EPLAN\Platform\$(EplanVersion)\Bin</EplanBinPath>
+
+    <!-- API assembly naming scheme. EPLAN 2027+ ships the managed API as Eplan.EplApi.*Netu.dll
+         (its *u.dll are native twins); EPLAN 2026 and earlier ship Eplan.EplApi.*u.dll. Detected
+         from the Bin folder; force it with -p:EplanApiSuffix=Netu or -p:EplanApiSuffix=u.
+         Runtime lookups use EplanMcp.Scripting.Core.EplanApiAssemblies, which applies the same rule. -->
+    <EplanApiSuffix Condition="'$(EplanApiSuffix)' == '' and Exists('$(EplanBinPath)\Eplan.EplApi.BaseNetu.dll')">Netu</EplanApiSuffix>
+    <EplanApiSuffix Condition="'$(EplanApiSuffix)' == '' and Exists('$(EplanBinPath)\Eplan.EplApi.Baseu.dll')">u</EplanApiSuffix>
+    <EplanApiSuffix Condition="'$(EplanApiSuffix)' == ''">Netu</EplanApiSuffix>
+  </PropertyGroup>
+</Project>

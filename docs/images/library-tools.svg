@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" width="860" height="330" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="13" fill="#1f2328">
+  <title>Library script tools</title>
+  <rect width="860" height="330" fill="#ffffff"/>
+
+  <rect x="16" y="16" width="400" height="298" rx="8" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="216" y="42" text-anchor="middle" font-weight="600">Read (@writes false)</text>
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="12">
+    <text x="32" y="72">project_info</text>       <text x="222" y="72">page_inspect</text>
+    <text x="32" y="96">page_property</text>      <text x="222" y="96">layer_table</text>
+    <text x="32" y="120">function_inspect</text>  <text x="222" y="120">function_dump</text>
+    <text x="32" y="144">unplaced_functions</text> <text x="222" y="144">cable_shields</text>
+    <text x="32" y="168">text_placements</text>   <text x="222" y="168">line_styles</text>
+    <text x="32" y="192">macrobox_links</text>    <text x="222" y="192">macro_prepare_inspect</text>
+    <text x="32" y="216">symbol_library_inspect</text> <text x="222" y="216">read_selection</text>
+    <text x="32" y="240">macrobox_snapshot</text> <text x="222" y="240">parts_snapshot</text>
+  </g>
+  <text x="32" y="270" font-size="11" fill="#57606a">Snapshots write a JSON file in the run folder, never the project.</text>
+  <text x="32" y="290" font-size="11" fill="#57606a">project_info also runs offline; read_selection needs the GUI.</text>
+
+  <rect x="444" y="16" width="400" height="298" rx="8" fill="#ffebe9" stroke="#cf222e"/>
+  <text x="644" y="42" text-anchor="middle" font-weight="600">Write (@writes true)</text>
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="12">
+    <text x="460" y="72">text_set_height</text>  <text x="650" y="72">text_set_box</text>
+    <text x="460" y="96">text_create</text>      <text x="650" y="96">line_styles_set</text>
+    <text x="460" y="120">function_move</text>   <text x="650" y="120">function_remove</text>
+    <text x="460" y="144">macrobox_restore</text> <text x="650" y="144">parts_restore</text>
+    <text x="460" y="168">set_selection</text>
+  </g>
+  <text x="460" y="200" font-size="12">Scratch clones only (as published tools)</text>
+  <text x="460" y="222" font-size="12">dry_run=True by default as published tools</text>
+  <text x="460" y="244" font-size="12">Handles come from the read tool</text>
+  <text x="460" y="266" font-size="12">Bulk writes need a limit; every write is read back</text>
+  <text x="460" y="290" font-size="11" fill="#57606a">set_selection changes the selection only (@unsafe, GUI).</text>
+</svg>

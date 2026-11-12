@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Generic EPLAN helpers for scripts: page and function finders, property reading, plain
+       descriptions, parts, macro boxes, selection, layers and symbol libraries. Loaded by the host
+       beside EplanMcp.Scripting, so every script can call it. Needs an installed EPLAN to build. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>EplanMcp.Eplan</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Eplan.EplApi.AF$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.AF$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.Base$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.Base$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.DataModel$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.DataModel$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.HEServices$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.HEServices$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.MasterData$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.MasterData$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.System$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.System$(EplanApiSuffix).dll" Private="false" />
+  </ItemGroup>
+</Project>

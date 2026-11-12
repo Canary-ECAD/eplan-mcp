@@ -23,12 +23,12 @@ RAG z dokumentacją znajdują się w osobnym repozytorium
 
 ```
 .
-└── eplan-p8-mcp-server/          # LOKALNIE: serwer MCP sterujący EPLAN P8
+└── python/          # LOKALNIE: serwer MCP sterujący EPLAN P8
 ```
 
 | Komponent | Typ | Przeznaczenie | Produkt EPLAN |
 |---|---|---|---|
-| `eplan-p8-mcp-server/` | Lokalny MCP w Pythonie | Sterowanie uruchomionym EPLAN z poziomu Claude: otwieranie/zamykanie projektów, eksport, raporty, skrypty | EPLAN Electric P8 |
+| `python/` | Lokalny MCP w Pythonie | Sterowanie uruchomionym EPLAN z poziomu Claude: otwieranie/zamykanie projektów, eksport, raporty, skrypty | EPLAN Electric P8 |
 | [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | Zdalne Cloudflare Workers, osobne repozytorium | Udostępnianie dokumentacji P8 2026, P8 2027 i EEC Pro przez MCP i REST | EPLAN Electric P8 i EEC Pro |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Umiejętność Claude Code, osobne repozytorium | Nauczenie Claude pisania poprawnych skryptów EPLAN, kodu API i aplikacji Remote Client | EPLAN Electric P8 |
 
@@ -45,13 +45,12 @@ zewnętrznymi narzędziami i usługami. Zamiast tylko generować kod, Claude mo�
 ### Lokalna automatyzacja EPLAN (P8)
 
 ```bash
-pip install pythonnet "mcp<2"
-claude mcp add eplan -- python TWOJA_SCIEZKA/eplan-p8-mcp-server/mcp_server/server.py
+python TWOJA_SCIEZKA/python/install.py   # own .venv + registers "eplan"
 claude mcp list   # powinien pojawić się "eplan"
 ```
 
 Następnie uruchom EPLAN, otwórz Claude Code i powiedz `connect to eplan`. Pełny przewodnik znajduje
-się w [`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md).
+się w [`python/mcp_server/README.md`](python/mcp_server/README.md).
 
 ![Skonfigurowane Claude CLI](assets/claude-cli-configured.png)
 
@@ -101,7 +100,7 @@ Opis narzędzie po narzędziu, generowany z docstringów tego repozytorium, znaj
 Każde narzędzie mówi, co robi, aby klient mógł zdecydować, kiedy najpierw zapytać
 użytkownika: ma cztery standardowe adnotacje MCP (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), a w swoim `_meta` pod kluczem
 `canary-ecad/eplan` fakty EPLAN `changesProject`, `runsCode`, `changesEplan`, `projectArgument` (zmienia otwarty projekt, uruchamia kod, zmienia sam
-EPLAN, argument wskazujący projekt). To fakty, nie zasady: tabela jest w [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py), a [`tools.json`](eplan-p8-mcp-server/tools.json) to
+EPLAN, argument wskazujący projekt). To fakty, nie zasady: tabela jest w [`mcp_server/tool_annotations.py`](python/mcp_server/tool_annotations.py), a [`tools.json`](python/tools.json) to
 opublikowana kopia. Każde wydanie (tag `vX.Y.Z`) dołącza `tools.json` i wymienia narzędzia
 dodane, usunięte lub z nowymi adnotacjami.
 
@@ -115,7 +114,7 @@ przy każdym żądaniu wysyłają pełny schemat wszystkich narzędzi.
 lista nazw, schemat dopiero na żądanie — więc lista `full` z 199 narzędziami kosztuje go mniej
 więcej tyle samo co 13 narzędzi trybu `discovery`, a dodatkowy krok wyszukaj → opisz → wywołaj
 dokłada tylko jeszcze jedno zapytanie. Kompromisy i pomiary są w
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md#discovery-mode-eplan_mcp_mode).
+[`python/mcp_server/README.md`](python/mcp_server/README.md#discovery-mode-eplan_mcp_mode).
 
 ### Zdalne RAG z dokumentacją (P8, EEC Pro, 2027)
 
@@ -180,12 +179,12 @@ indeksowanie i wdrożenie odbywa się przez GitHub Actions w
 #### Użycie z tego serwera MCP
 
 Gotowe rozszerzenie znajduje się w
-[`eplan-p8-mcp-server/extensions/symbol_search.py`](./eplan-p8-mcp-server/extensions/symbol_search.py).
+[`python/extensions/symbol_search.py`](./python/extensions/symbol_search.py).
 Po jego włączeniu agent dostaje narzędzie `eplan_symbol_search`:
 
 ```powershell
 pip install sentence-transformers pillow requests
-set EPLAN_MCP_EXTENSIONS=<repo>\eplan-p8-mcp-server\extensions
+set EPLAN_MCP_EXTENSIONS=<repo>\python\extensions
 ```
 
 Następnie, mając wycięty obraz symbolu, Claude wywołuje
@@ -224,7 +223,7 @@ więc dodanie akcji to dwa kroki bez szablonowego kodu dla każdego narzędzia.
 
 ### 1. Zaimplementuj akcję
 
-W `eplan-p8-mcp-server/mcp_server/api/actions/<twoj_modul>.py`:
+W `python/mcp_server/api/actions/<twoj_modul>.py`:
 
 ```python
 def open_project(project_path: str, open_mode: str = None) -> dict:
@@ -244,7 +243,7 @@ def open_project(project_path: str, open_mode: str = None) -> dict:
 ### 2. Wyeksportuj ją
 
 Dodaj funkcję do importów **i** do `__all__` w
-`eplan-p8-mcp-server/mcp_server/api/actions/__init__.py`. Zostanie wtedy automatycznie
+`python/mcp_server/api/actions/__init__.py`. Zostanie wtedy automatycznie
 zarejestrowana jako `eplan_open_project`.
 
 ### 3. Uruchom ponownie serwer MCP
@@ -253,11 +252,11 @@ Nowe narzędzie będzie dostępne po ponownym uruchomieniu Claude lub serwera.
 
 ### 4. Sprawdź z oficjalną dokumentacją (opcjonalnie)
 
-`eplan-p8-mcp-server/tools/validate_actions.py` porównuje każdą nazwę akcji i każdy parametr
+`python/tools/validate_actions.py` porównuje każdą nazwę akcji i każdy parametr
 zadeklarowany w opakowaniach z RAG oficjalnej dokumentacji EPLAN i zapisuje raport w markdown:
 
 ```bash
-python eplan-p8-mcp-server/tools/validate_actions.py
+python python/tools/validate_actions.py
 ```
 
 ![Test EPLAN](assets/eplan-test.png)

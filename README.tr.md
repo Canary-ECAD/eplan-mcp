@@ -22,12 +22,12 @@ Bu depo, çalışan bir EPLAN örneğini yöneten yerel MCP sunucusunu içerir. 
 
 ```
 .
-└── eplan-p8-mcp-server/          # YEREL: EPLAN P8'i yöneten MCP sunucusu
+└── python/          # YEREL: EPLAN P8'i yöneten MCP sunucusu
 ```
 
 | Bileşen | Tür | Amaç | EPLAN ürünü |
 |---|---|---|---|
-| `eplan-p8-mcp-server/` | Yerel Python MCP | Çalışan EPLAN'ı Claude'dan yönetmek: proje açma/kapama, dışa aktarma, raporlar, betikler | EPLAN Electric P8 |
+| `python/` | Yerel Python MCP | Çalışan EPLAN'ı Claude'dan yönetmek: proje açma/kapama, dışa aktarma, raporlar, betikler | EPLAN Electric P8 |
 | [**eplan-cloudflare-rags**](https://github.com/Canary-ECAD/eplan-cloudflare-rags) | Uzak Cloudflare Workers, ayrı depo | P8 2026, P8 2027 ve EEC Pro belgelerini MCP ve REST üzerinden sunmak | EPLAN Electric P8 ve EEC Pro |
 | [**eplan-scripting-skill**](https://github.com/Canary-ECAD/eplan-scripting-skill) | Claude Code becerisi, ayrı depo | Claude'a doğru EPLAN betikleri, API kodu ve Remote Client uygulamaları yazmayı öğretmek | EPLAN Electric P8 |
 
@@ -44,13 +44,12 @@ EPLAN içinde gerçek zamanlı olarak işlem *yürütebilir* ve belgelere arama 
 ### Yerel EPLAN otomasyonu (P8)
 
 ```bash
-pip install pythonnet "mcp<2"
-claude mcp add eplan -- python YOLUNUZ/eplan-p8-mcp-server/mcp_server/server.py
+python YOLUNUZ/python/install.py   # own .venv + registers "eplan"
 claude mcp list   # "eplan" listelenmeli
 ```
 
 Ardından EPLAN'ı başlatın, Claude Code'u açın ve `connect to eplan` deyin. Kılavuzun tamamı
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md) dosyasındadır.
+[`python/mcp_server/README.md`](python/mcp_server/README.md) dosyasındadır.
 
 ![Yapılandırılmış Claude CLI](assets/claude-cli-configured.png)
 
@@ -102,7 +101,7 @@ Her araç ne yaptığını söyler; böylece istemci kullanıcıya ne zaman önc
 verebilir. Dört standart MCP açıklamasını (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) ve `_meta` içinde `canary-ecad/eplan`
 anahtarı altında EPLAN olgularını `changesProject`, `runsCode`, `changesEplan`, `projectArgument` taşır (açık projeyi değiştirir, kod çalıştırır,
 EPLAN'ın kendisini değiştirir, projeyi adlandıran argüman). Bunlar politika değil olgudur:
-tablo [`mcp_server/tool_annotations.py`](eplan-p8-mcp-server/mcp_server/tool_annotations.py) dosyasındadır, [`tools.json`](eplan-p8-mcp-server/tools.json) yayımlanan kopyadır. Her sürüm (`vX.Y.Z` etiketi)
+tablo [`mcp_server/tool_annotations.py`](python/mcp_server/tool_annotations.py) dosyasındadır, [`tools.json`](python/tools.json) yayımlanan kopyadır. Her sürüm (`vX.Y.Z` etiketi)
 `tools.json` dosyasını ekler ve eklenen, kaldırılan ya da yeniden açıklanan araçları listeler.
 
 #### Discovery modu
@@ -115,7 +114,7 @@ istemcileri için buna değer.
 listesi, şema ise gerektiğinde —; bu yüzden 199 araçlık `full` listesi ona neredeyse `discovery`
 modunun 13 aracı kadar az mal olur ve üstüne ara → açıkla → çağır dolaylılığını eklemek yalnızca
 bir tur daha ekler. Ödünleşim ve ölçümler
-[`eplan-p8-mcp-server/mcp_server/README.md`](eplan-p8-mcp-server/mcp_server/README.md#discovery-mode-eplan_mcp_mode)
+[`python/mcp_server/README.md`](python/mcp_server/README.md#discovery-mode-eplan_mcp_mode)
 dosyasındadır.
 
 ### Uzak belge RAG'leri (P8, EEC Pro, 2027)
@@ -182,12 +181,12 @@ içindeki GitHub Actions ile yapılır.
 #### Bu MCP sunucusundan kullanma
 
 Hazır bir uzantı
-[`eplan-p8-mcp-server/extensions/symbol_search.py`](./eplan-p8-mcp-server/extensions/symbol_search.py)
+[`python/extensions/symbol_search.py`](./python/extensions/symbol_search.py)
 içinde gelir. Etkinleştirdiğinizde ajan `eplan_symbol_search` aracını kazanır:
 
 ```powershell
 pip install sentence-transformers pillow requests
-set EPLAN_MCP_EXTENSIONS=<repo>\eplan-p8-mcp-server\extensions
+set EPLAN_MCP_EXTENSIONS=<repo>\python\extensions
 ```
 
 Ardından kırpılmış bir sembol görüntüsü verildiğinde Claude
@@ -226,7 +225,7 @@ bu yüzden bir işlem eklemek iki adım sürer ve araç başına kalıp kod gere
 
 ### 1. İşlemi uygulayın
 
-`eplan-p8-mcp-server/mcp_server/api/actions/<modülünüz>.py` içinde:
+`python/mcp_server/api/actions/<modülünüz>.py` içinde:
 
 ```python
 def open_project(project_path: str, open_mode: str = None) -> dict:
@@ -245,7 +244,7 @@ def open_project(project_path: str, open_mode: str = None) -> dict:
 
 ### 2. Dışa aktarın
 
-Fonksiyonu `eplan-p8-mcp-server/mcp_server/api/actions/__init__.py` içindeki import'lara **ve**
+Fonksiyonu `python/mcp_server/api/actions/__init__.py` içindeki import'lara **ve**
 `__all__` listesine ekleyin. Ardından otomatik olarak `eplan_open_project` adıyla kaydedilir.
 
 ### 3. MCP sunucusunu yeniden başlatın
@@ -254,11 +253,11 @@ Yeni araç, Claude veya sunucu yeniden başladığında kullanılabilir olur.
 
 ### 4. Resmî belgelerle doğrulayın (isteğe bağlı)
 
-`eplan-p8-mcp-server/tools/validate_actions.py`, sarmalayıcılarda tanımlanan her işlem adını ve
+`python/tools/validate_actions.py`, sarmalayıcılarda tanımlanan her işlem adını ve
 parametresini resmî EPLAN belge RAG'i ile karşılaştırır ve markdown bir rapor yazar:
 
 ```bash
-python eplan-p8-mcp-server/tools/validate_actions.py
+python python/tools/validate_actions.py
 ```
 
 ![EPLAN testi](assets/eplan-test.png)
