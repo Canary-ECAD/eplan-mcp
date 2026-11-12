@@ -15,5 +15,13 @@
 
     <EplanVersion Condition="'$(EplanVersion)' == ''">2027.0.3</EplanVersion>
     <EplanBinPath Condition="'$(EplanBinPath)' == ''">$(ProgramW6432)\EPLAN\Platform\$(EplanVersion)\Bin</EplanBinPath>
+
+    <!-- API assembly naming scheme. EPLAN 2027+ ships the managed API as Eplan.EplApi.*Netu.dll
+         (its *u.dll are native twins); EPLAN 2026 and earlier ship Eplan.EplApi.*u.dll. Detected
+         from the Bin folder; force it with -p:EplanApiSuffix=Netu or -p:EplanApiSuffix=u.
+         Runtime lookups use EplanMcp.Scripting.Core.EplanApiAssemblies, which applies the same rule. -->
+    <EplanApiSuffix Condition="'$(EplanApiSuffix)' == '' and Exists('$(EplanBinPath)\Eplan.EplApi.BaseNetu.dll')">Netu</EplanApiSuffix>
+    <EplanApiSuffix Condition="'$(EplanApiSuffix)' == '' and Exists('$(EplanBinPath)\Eplan.EplApi.Baseu.dll')">u</EplanApiSuffix>
+    <EplanApiSuffix Condition="'$(EplanApiSuffix)' == ''">Netu</EplanApiSuffix>
   </PropertyGroup>
 </Project>

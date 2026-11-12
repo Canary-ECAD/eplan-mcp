@@ -41,6 +41,12 @@ class FakeManager:
         raise AssertionError("unexpected action " + action)
 
 
+@pytest.fixture(autouse=True)
+def _eplan_2027(monkeypatch):
+    """These tests play a .NET 8 EPLAN; the machine running them may have only 2026 installed."""
+    monkeypatch.setattr(scripthost, "_unsupported_eplan", lambda: None)
+
+
 @pytest.fixture
 def host(tmp_path, monkeypatch):
     host_dir = tmp_path / "host"

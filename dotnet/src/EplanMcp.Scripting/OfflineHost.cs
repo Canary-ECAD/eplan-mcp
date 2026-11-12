@@ -120,7 +120,7 @@ namespace EplanMcp.Scripting
                 if (string.IsNullOrEmpty(req.RunFolder)) req.RunFolder = Path.GetDirectoryName(resultPath) ?? "";
                 // In this process EPLAN loads its API assemblies lazily, so the compile references
                 // would miss any not yet touched (HEServices, MasterData...). Reference them all.
-                foreach (var dll in Directory.GetFiles(Environment.CurrentDirectory, "Eplan.EplApi.*Netu.dll"))
+                foreach (var dll in EplanApiAssemblies.InBin(Environment.CurrentDirectory))
                     if (!req.References.Contains(dll)) req.References.Add(dll);
                 _busyRunId = req.RunId;
                 var env = new OfflineEnvironment();

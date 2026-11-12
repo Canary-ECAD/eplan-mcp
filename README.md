@@ -129,13 +129,22 @@ scratch clones unless a person enables real-project writes and approves each sav
 library in `dotnet/scripts/` ships ready-made tools for texts, line styles, functions, macro boxes
 and parts. All runtimes need the EPLAN API developer license.
 
+**EPLAN 2027 or newer only.** The host is .NET 8; EPLAN 2026 and older run on .NET Framework 4.8
+and cannot load it, so `eplan_script_hello` and `eplan_script_run` refuse there and point at
+`eplan_execute_custom_script` and the `eplan_live_*` tools. The scripts themselves compile against
+both API naming schemes (`Eplan.EplApi.*Netu.dll` on 2027, `*u.dll` on 2026), which
+`dotnet/` detects from EPLAN's `Bin` folder (`-p:EplanApiSuffix=` forces it).
+
 ![Script host: MCP client, Python server, three runtimes, EPLAN API](docs/images/script-host-architecture.svg)
 
 Quick start (the server folder is now `python/`: see the "Moved" note in
 [Quick start](#local-eplan-automation-p8)):
 
-1. `eplan_script_host_install`: downloads the host release, checks its SHA-256 sums and installs
-   it under `~/.eplan-mcp/host/<version>`. The script tools also do this on first use.
+1. `eplan_script_host_install`: downloads the host release (GitHub tag `host-v<version>`, separate
+   from the server's `vX.Y.Z` tags), checks its SHA-256 sums and installs it under
+   `~/.eplan-mcp/host/<version>`. The script tools also do this on first use. Maintainers build
+   and publish that release on a machine with EPLAN 2027 with `dotnet/pack/pack-release.ps1`, which
+   prints the `gh release create` command.
 2. `eplan_script_hello`: reports the host version, the runtime that answers, EPLAN and the license.
 3. Run a library script on a scratch clone. Pass `dry_run=True` to see what a writing script would
    change:

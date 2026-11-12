@@ -26,8 +26,8 @@ def _zip(entries: dict) -> bytes:
 
 @pytest.fixture
 def release(tmp_path, monkeypatch):
-    """Serves <root>/repo/releases/download/v<V>/ and records every request path."""
-    folder = tmp_path / "www" / "repo" / "releases" / "download" / ("v" + V)
+    """Serves <root>/repo/releases/download/host-v<V>/ and records every request path."""
+    folder = tmp_path / "www" / "repo" / "releases" / "download" / ("host-v" + V)
     folder.mkdir(parents=True)
     requests = []
 
@@ -133,3 +133,19 @@ def test_dropped_download_is_reported_not_raised(tmp_path, monkeypatch):
     monkeypatch.setattr(scripthost.urllib.request, "urlopen", broken)
     out = scripthost.script_host_install()
     assert out["success"] is False and not _leftovers(tmp_path / "installed")
+
+
+def test_missing_release_says_what_to_do(release):
+    _, requests, root = release            # nothing published: the server answers 404
+    out = scripthost.script_host_install()
+    assert out["success"] is False
+    assert "host-v" + V in out["error"] and "pack-release.ps1" in out["error"]
+    assert requests == ["/repo/releases/download/host-v%s/SHA256SUMS.txt" % V]
+    assert not _leftovers(root)
+
+
+def test_host_tags_never_match_the_server_release_trigger():
+    # release.yml publishes the server on tags "v[0-9]+.[0-9]+.[0-9]+"; host tags must not match.
+    import re
+    assert not re.match(r"v[0-9]+\.[0-9]+\.[0-9]+", scripthost.HOST_TAG_PREFIX + V)
+    assert scripthost.REPO_URL == "https://github.com/Canary-ECAD/eplan-mcp"

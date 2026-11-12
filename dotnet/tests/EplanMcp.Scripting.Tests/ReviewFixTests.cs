@@ -20,7 +20,7 @@ namespace EplanMcp.Scripting.Tests
 
         private static Microsoft.CodeAnalysis.CSharp.CSharpCompilation Compile(string src, string name)
         {
-            var refs = ReferenceSet.FromPaths(Directory.GetFiles(EplanBin(), "Eplan.EplApi.*Netu.dll")
+            var refs = ReferenceSet.FromPaths(EplanApiAssemblies.InBin(EplanBin())
                 .Concat(new[] { typeof(ScriptArgs).Assembly.Location, typeof(Pages).Assembly.Location }));
             var compiled = ScriptCompiler.Compile(SourceComposer.Compose(src, name + ".cs", EplanEnvironment.DefaultSnippets), name + ".cs",
                 Array.Empty<(string, string)>(), refs, "check_" + name);

@@ -15,11 +15,11 @@
     <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Eplan.EplApi.AFNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.AFNetu.dll" Private="false" />
-    <Reference Include="Eplan.EplApi.BaseNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.BaseNetu.dll" Private="false" />
-    <Reference Include="Eplan.EplApi.DataModelNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.DataModelNetu.dll" Private="false" />
-    <Reference Include="Eplan.EplApi.HEServicesNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.HEServicesNetu.dll" Private="false" />
-    <Reference Include="Eplan.EplApi.MasterDataNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.MasterDataNetu.dll" Private="false" />
-    <Reference Include="Eplan.EplApi.SystemNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.SystemNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.AF$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.AF$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.Base$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.Base$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.DataModel$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.DataModel$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.HEServices$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.HEServices$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.MasterData$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.MasterData$(EplanApiSuffix).dll" Private="false" />
+    <Reference Include="Eplan.EplApi.System$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.System$(EplanApiSuffix).dll" Private="false" />
   </ItemGroup>
 </Project>

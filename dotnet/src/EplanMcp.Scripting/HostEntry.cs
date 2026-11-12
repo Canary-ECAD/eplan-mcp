@@ -88,12 +88,12 @@ namespace EplanMcp.Scripting
             string? bin = null;
             foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (a.IsDynamic || a.GetName().Name != "Eplan.EplApi.BaseNetu") continue;
+                if (a.IsDynamic || !EplanApiAssemblies.IsModule(a.GetName().Name, "Base")) continue;
                 try { bin = Path.GetDirectoryName(a.Location); } catch (NotSupportedException) { }
                 if (!string.IsNullOrEmpty(bin)) break;
             }
             if (string.IsNullOrEmpty(bin) || !Directory.Exists(bin)) return;
-            foreach (var dll in Directory.GetFiles(bin!, "Eplan.EplApi.*Netu.dll"))
+            foreach (var dll in EplanApiAssemblies.InBin(bin!))
                 if (!req.References.Contains(dll)) req.References.Add(dll);
         }
 

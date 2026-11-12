@@ -16,7 +16,7 @@
     <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
     <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
     <ProjectReference Include="..\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
-    <Reference Include="Eplan.EplApi.StarterNetu" HintPath="$(EplanBinPath)\Eplan.EplApi.StarterNetu.dll" Private="false" />
+    <Reference Include="Eplan.EplApi.Starter$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.Starter$(EplanApiSuffix).dll" Private="false" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">

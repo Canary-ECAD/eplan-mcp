@@ -53,7 +53,7 @@ namespace EplanMcp.Scripting.Tests
             var snippets = EplanEnvironment.DefaultSnippets;
             var composed = SourceComposer.Compose(source, Path.GetFileName(path), snippets);
             var refs = ReferenceSet.FromPaths(
-                Directory.GetFiles(bin, "Eplan.EplApi.*Netu.dll")
+                EplanApiAssemblies.InBin(bin)
                     .Concat(new[] { typeof(ScriptArgs).Assembly.Location, typeof(RunPipeline).Assembly.Location, EplanHelpers }));
             var compiled = ScriptCompiler.Compile(composed, Path.GetFileName(path),
                 Array.Empty<(string, string)>(), refs, "check_" + Path.GetFileNameWithoutExtension(path));
@@ -70,7 +70,7 @@ namespace EplanMcp.Scripting.Tests
             var bin = EplanBin();
             const string src = "var p = ctx.RequireProject();\nforeach (var f in new DMObjectsFinder(p).GetFunctions(null)) { f.SmartLock(); }\nreturn 1;";
             var snippets = EplanEnvironment.DefaultSnippets;
-            var refs = ReferenceSet.FromPaths(Directory.GetFiles(bin, "Eplan.EplApi.*Netu.dll")
+            var refs = ReferenceSet.FromPaths(EplanApiAssemblies.InBin(bin)
                 .Concat(new[] { typeof(ScriptArgs).Assembly.Location, EplanHelpers }));
             var compiled = ScriptCompiler.Compile(SourceComposer.Compose(src, "w.cs", snippets), "w.cs",
                 Array.Empty<(string, string)>(), refs, "check_write");
@@ -84,7 +84,7 @@ namespace EplanMcp.Scripting.Tests
         {
             var bin = EplanBin();
             const string src = "// @writes true\nvar all = new ProjectManager().OpenProjects;\nreturn all.Length;";
-            var refs = ReferenceSet.FromPaths(Directory.GetFiles(bin, "Eplan.EplApi.*Netu.dll")
+            var refs = ReferenceSet.FromPaths(EplanApiAssemblies.InBin(bin)
                 .Concat(new[] { typeof(ScriptArgs).Assembly.Location, EplanHelpers }));
             var compiled = ScriptCompiler.Compile(SourceComposer.Compose(src, "p.cs", EplanEnvironment.DefaultSnippets), "p.cs",
                 Array.Empty<(string, string)>(), refs, "check_other_projects");

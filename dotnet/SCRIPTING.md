@@ -8,6 +8,13 @@ bootstrap (`ExecuteScript`, nothing registered) and the offline host (no EPLAN w
 projects only, scripts with `@needs offline` or `@needs either`). `runtime="auto"` takes the add-in
 when it answers, else the bootstrap. All need the EPLAN API developer license.
 
+The host needs EPLAN 2027 or newer (.NET 8). On EPLAN 2026 and older (.NET Framework 4.8) the
+script tools refuse up front. Building `dotnet/` works against either install: the managed API is
+`Eplan.EplApi.*Netu.dll` on 2027 (its `*u.dll` are native twins that must never be referenced) and
+`Eplan.EplApi.*u.dll` on 2026. `Directory.Build.props` picks `EplanApiSuffix` from the `Bin`
+folder, and at run time `EplanApiAssemblies.InBin` applies the same rule, so ScriptCheck and the
+compile tests also check every library script against a 2026 API.
+
 ![One run: header, compile, safety check, write gate, run, result, unload](../docs/images/script-run-flow.svg)
 
 ## The smallest script

@@ -24,6 +24,18 @@ $props = @("-c", "Release", "--no-incremental", "-p:ContinuousIntegrationBuild=t
            "-p:DebugType=none", "-p:DebugSymbols=false")
 if ($EplanVersion) { $props += "-p:EplanVersion=$EplanVersion" }
 
+# The host runs only inside a .NET 8 EPLAN (2027+). Built against an older EPLAN it compiles, but
+# binds to Eplan.EplApi.*u.dll and cannot load in 2027, nor in the .NET Framework EPLAN itself.
+$probeVersion = $EplanVersion
+if (-not $probeVersion) {
+    $m = [regex]::Match((Get-Content (Join-Path $root "Directory.Build.props") -Raw), "<EplanVersion[^>]*>([^<]+)</EplanVersion>")
+    $probeVersion = $m.Groups[1].Value
+}
+$bin = Join-Path $env:ProgramW6432 "EPLAN\Platform\$probeVersion\Bin"
+if (-not (Test-Path (Join-Path $bin "Eplan.EplApi.BaseNetu.dll"))) {
+    throw "No .NET 8 EPLAN at $bin (Eplan.EplApi.BaseNetu.dll missing). Release builds need EPLAN 2027 or newer; pass -EplanVersion."
+}
+
 dotnet build (Join-Path $root "src/EplanMcp.Host.AddIn") @props | Out-Host
 if ($LASTEXITCODE) { throw "Host build failed." }
 dotnet build (Join-Path $root "src/EplanMcp.Host.Offline") @props | Out-Host
@@ -96,3 +108,9 @@ $sums | Set-Content -Encoding ascii (Join-Path $out "SHA256SUMS.txt")
 Remove-Item $stage -Recurse -Force
 Write-Host "Release artifacts in $out"
 $sums | Write-Host
+# Host releases use their own tag line (host-v<version>, see HOST_TAG_PREFIX in
+# python/mcp_server/api/actions/scripthost.py): it never triggers the server's release workflow.
+Write-Host ""
+Write-Host "Publish with:"
+Write-Host ("  gh release create host-v$version `"$addonZip`" `"$offlineZip`" `"$(Join-Path $out 'SHA256SUMS.txt')`" " +
+            "--title `"Script host $version`" --notes `"EplanMcp script host $version, built against EPLAN $probeVersion.`"")
