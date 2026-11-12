@@ -453,6 +453,13 @@ _HELPERS_SCHEMATIC = r'''
     }
 '''
 
+# GuardScratch on its own, for scripts built on the plain live scaffold (objects.py) rather than
+# on _HELPERS_SCHEMATIC. Cut from the block above so there is one copy of the guard.
+_GUARD_SCRATCH_CS = _HELPERS_SCHEMATIC[
+    _HELPERS_SCHEMATIC.index("    // ---- the scratch guard"):
+    _HELPERS_SCHEMATIC.index("    // ---- page lookup")]
+assert "static void GuardScratch(" in _GUARD_SCRATCH_CS
+
 
 # ---------------------------------------------------------------------------
 # Python-side shared plumbing

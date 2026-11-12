@@ -196,7 +196,8 @@ def _validate(kind, where, read, limit):
     return None, list(where), [str(r) for r in read], limit
 
 
-def _body(kind, where, read, set_props, update_from_part, dry_run, limit, project=None):
+def _body(kind, where, read, set_props, update_from_part, dry_run, limit, project=None,
+          guard=None):
     w_prop = _cs_array(w["prop"] for w in where)
     w_op = _cs_array(w.get("op", "eq") for w in where)
     w_val = _cs_array("" if w.get("value") is None else w["value"] for w in where)
@@ -204,6 +205,9 @@ def _body(kind, where, read, set_props, update_from_part, dry_run, limit, projec
     pick = '''            project = PickProject(project, "''' + cs_escape(project or "") + '''");
             results["project"] = PropText(project, "ProjectName");
 '''
+    if guard is not None:
+        # After PickProject, so the guard checks the project the write really lands in.
+        pick += guard
     return pick + _FINDER + '''            string KIND = "''' + kind + '''";
             string[] wProp = ''' + w_prop + ''';
             string[] wOp = ''' + w_op + ''';
@@ -326,9 +330,9 @@ def _body(kind, where, read, set_props, update_from_part, dry_run, limit, projec
 '''
 
 
-def _run(name, body, timeout_seconds):
+def _run(name, body, timeout_seconds, extra=""):
     return _execute_script(
-        _script(name + "_" + uuid.uuid4().hex[:6], body, extra_helpers=_HELPERS),
+        _script(name + "_" + uuid.uuid4().hex[:6], body, extra_helpers=_HELPERS + extra),
         timeout=timeout_seconds,
     )
 
@@ -370,7 +374,8 @@ def live_objects_read(kind: str, where: list = None, read: list = None, limit: i
 def live_objects_edit(kind: str, where: list = None, set: dict = None,
                       update_from_part: bool = False, read: list = None,
                       dry_run: bool = True, limit: int = 500,
-                      timeout_seconds: float = 300.0, project: str = None) -> dict:
+                      timeout_seconds: float = 300.0, project: str = None,
+                      allow_real_project: bool = False) -> dict:
     """
     Find objects in the open project and write their properties and/or
     re-apply their part data. dry_run=True (default) changes nothing and shows
@@ -398,6 +403,10 @@ def live_objects_edit(kind: str, where: list = None, set: dict = None,
         dry_run: True (default) previews only.
         limit: Max objects listed (default 500). Every match is still edited.
         timeout_seconds: Default 300.
+        allow_real_project: Must be True to write to a project outside the scratch
+            root (eplan_scratch_project_create), like every other live writer. Checked
+            inside EPLAN against the project the edit really lands in. Ignored on a
+            dry run, which writes nothing.
 
     Returns:
         As live_objects_read, plus "changed", "failed", and per object
@@ -417,6 +426,9 @@ def live_objects_edit(kind: str, where: list = None, set: dict = None,
     if err:
         return err
     set_props = {str(k): "" if v is None else str(v) for k, v in set_props.items()}
+    from .schematic import _GUARD_SCRATCH_CS, _guard_prelude
+    guard = None if dry_run else _guard_prelude(allow_real_project)
     return _run("LiveObjectsEdit",
-                _body(kind, where, read, set_props, update_from_part, dry_run, limit, project),
-                timeout_seconds)
+                _body(kind, where, read, set_props, update_from_part, dry_run, limit, project,
+                      guard=guard),
+                timeout_seconds, extra="" if dry_run else _GUARD_SCRATCH_CS)

@@ -201,7 +201,10 @@ _HELPERS_TEXT = r'''
 '''
 
 
-_BODY = r'''            Type ssType2 = ss.GetType();
+_BODY = r'''            // The shared live header no longer declares a SelectionSet (it resolves the target
+            // project instead), so the GED selection scope gets its own.
+            Type ssType2 = FindType("Eplan.EplApi.HEServices.SelectionSet");
+            object ss = Activator.CreateInstance(ssType2);
             bool dryRun = DRYRUN;
             double factor = FACTOR;
             double minHeight = MINHEIGHT;
@@ -629,7 +632,10 @@ _HELPERS_LAYER = r'''
 '''
 
 
-_BODY_LAYER = r'''            Type ssType2 = ss.GetType();
+_BODY_LAYER = r'''            // The shared live header no longer declares a SelectionSet (it resolves the target
+            // project instead), so the GED selection scope gets its own.
+            Type ssType2 = FindType("Eplan.EplApi.HEServices.SelectionSet");
+            object ss = Activator.CreateInstance(ssType2);
             bool dryRun = DRYRUN;
             bool includePps = INCLUDEPPS;
             bool allowShared = ALLOWSHARED;
