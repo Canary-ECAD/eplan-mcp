@@ -226,13 +226,75 @@ def scratch_project_create(template_project: str, name: str = None,
     return result
 
 
+# Close ONE project object, found by its path among EPLAN's open projects. Not
+# XPrjActionProjectClose: that closes whatever the GUI has selected, and with a navigator
+# multi-selection it closed a real project together with the clone (seen live on EPLAN 2026).
+_CLOSE_BY_PATH_BODY = '''
+            Type pmTypeC = FindType("Eplan.EplApi.DataModel.ProjectManager");
+            object pmC = Activator.CreateInstance(pmTypeC);
+            PropertyInfo openPi = RequireReadable(pmTypeC, "OpenProjects");
+            List<string> before = new List<string>();
+            foreach (object p in (IEnumerable)openPi.GetValue(pmC, null))
+                if (p != null) before.Add(PropText(p, "ProjectLinkFilePath") ?? PropText(p, "ProjectName") ?? "");
+            results["closing"] = PropText(project, "ProjectLinkFilePath") ?? PropText(project, "ProjectName");
+            results["before"] = before;
+            MethodInfo closeMi = MethodByShape(project.GetType(), "Close", new string[] { }, false);
+            if (closeMi == null)
+                throw new Exception("Project.Close() not found. " + MemberList(project.GetType(), true));
+            closeMi.Invoke(project, null);
+            List<string> after = new List<string>();
+            foreach (object p in (IEnumerable)openPi.GetValue(pmC, null))
+                if (p != null) after.Add(PropText(p, "ProjectLinkFilePath") ?? PropText(p, "ProjectName") ?? "");
+            results["after"] = after;
+            results["success"] = true;
+'''
+
+
+def _norm(path: str) -> str:
+    return os.path.normcase(os.path.abspath(path or "")) if path else ""
+
+
+def _close_scratch_in_eplan(elk: str) -> dict:
+    """Close exactly the clone `elk` in EPLAN. {"success", "was_open", "before", "after"}.
+
+    Fails (and nothing may be deleted) when another project went missing too."""
+    from . import live, target
+    previous = target.get()
+    target.set_target(elk)      # the live header then resolves the clone by path
+    try:
+        script = live._script("ScratchClose_" + secrets.token_hex(4), _CLOSE_BY_PATH_BODY)
+    finally:
+        target.set_target(previous)
+    out = live._execute_script(script, timeout=120)
+    res = out.get("results") if isinstance(out.get("results"), dict) else out
+    if not res.get("success"):
+        error = str(res.get("error") or out.get("error") or "")
+        if "is not open in EPLAN" in error:
+            return {"success": True, "was_open": False}
+        return {"success": False, "errorType": "CloseFailed", "error": error or "close failed",
+                "next_step": "Close the clone in EPLAN by hand, then retry with close_first=False."}
+    before = {_norm(p) for p in res.get("before") or []}
+    after = {_norm(p) for p in res.get("after") or []}
+    lost = sorted(before - after - {_norm(elk)})
+    result = {"success": _norm(elk) not in after and not lost, "was_open": True,
+              "before": res.get("before"), "after": res.get("after")}
+    if lost:
+        result.update(errorType="ClosedOtherProjects",
+                      error="Closing the clone also closed: " + ", ".join(lost),
+                      next_step="Reopen those projects; nothing was deleted.")
+    elif _norm(elk) in after:
+        result.update(errorType="StillOpen", error="EPLAN still lists the clone as open.")
+    return result
+
+
 def scratch_project_discard(project_path: str, close_first: bool = True) -> dict:
     """
     Delete a scratch project created by scratch_project_create.
 
     Refuses to touch anything outside the scratch root, so this can never
-    delete a real project. Closes the clone in EPLAN first; if a different
-    project has focus, or the close fails, nothing is deleted. Pass
+    delete a real project. Closes the clone in EPLAN first - that one project
+    object, by path, whatever has GUI focus, and checks that every other open
+    project is still open; if the close fails, nothing is deleted. Pass
     close_first=False only for a clone you know is not open in EPLAN.
 
     Args:
@@ -251,12 +313,8 @@ def scratch_project_discard(project_path: str, close_first: bool = True) -> dict
     if close_first:
         manager, error = _get_connected_manager()
         if not error:
-            from .project import close_project
-            closed = close_project(expected_project=elk)
-            if not closed.get("success") and closed.get("errorType") != "NoProjectOpen":
-                if closed.get("errorType") in ("WrongProjectFocused", "FocusUnknown"):
-                    closed["next_step"] += (" If the clone is not open in EPLAN at all, "
-                                            "retry with close_first=False.")
+            closed = _close_scratch_in_eplan(elk)
+            if not closed.get("success"):
                 return {**closed, "deleted": None}
 
     # .edb first: if EPLAN still holds it, the .elk link survives and the

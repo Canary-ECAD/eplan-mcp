@@ -215,15 +215,6 @@ def test_close_last_project_verified_when_selectionset_then_throws(eplan, elk):
     assert result["success"] and result["verified"]
 
 
-def test_discard_keeps_files_when_focus_unknown(eplan, clone):
-    eplan.focused = clone
-    _selectionset_fails(eplan, "always")
-    result = fixtures.scratch_project_discard(clone)
-    assert result["success"] is False and result["errorType"] == "FocusUnknown"
-    assert "close_first=False" in result["next_step"]
-    assert os.path.exists(clone)
-
-
 def test_discard_refuses_the_scratch_root_itself(eplan, clone, monkeypatch):
     root = fixtures.SCRATCH_ROOT
     os.mkdir(root + ".edb")                      # sibling OUTSIDE the root
@@ -276,31 +267,50 @@ def clone(tmp_path, monkeypatch):
     return str(elk_path)
 
 
-def test_discard_keeps_files_when_close_fails(eplan, clone, tmp_path):
-    eplan.focused = str(tmp_path / "Real.elk")
+def _closer(monkeypatch, outcome):
+    """Plays _close_scratch_in_eplan: the close-by-path script's outcome."""
+    calls = []
+    monkeypatch.setattr(fixtures, "_close_scratch_in_eplan",
+                        lambda elk: (calls.append(elk), dict(outcome))[1])
+    return calls
+
+
+def test_discard_keeps_files_when_close_fails(eplan, clone, monkeypatch):
+    _closer(monkeypatch, {"success": False, "errorType": "CloseFailed", "error": "boom",
+                          "next_step": "Close the clone in EPLAN by hand, then retry with close_first=False."})
     result = fixtures.scratch_project_discard(clone)
-    assert result["success"] is False and result["errorType"] == "WrongProjectFocused"
+    assert result["success"] is False and result["errorType"] == "CloseFailed"
     assert "close_first=False" in result["next_step"]
     assert os.path.exists(clone) and os.path.isdir(clone[:-4] + ".edb")
 
 
+def test_discard_keeps_files_when_other_projects_closed(eplan, clone, monkeypatch):
+    _closer(monkeypatch, {"success": False, "errorType": "ClosedOtherProjects", "error": "x"})
+    result = fixtures.scratch_project_discard(clone)
+    assert result["success"] is False and result["deleted"] is None
+    assert os.path.exists(clone)
+
+
 def test_discard_closes_then_deletes_edb_first(eplan, clone, monkeypatch):
-    eplan.focused = clone
+    calls = _closer(monkeypatch, {"success": True, "was_open": True})
     order = []
     monkeypatch.setattr(fixtures.shutil, "rmtree", lambda p, **kw: order.append(p))
     monkeypatch.setattr(fixtures.os, "remove", lambda p: order.append(p))
     result = fixtures.scratch_project_discard(clone)
-    assert result["success"] is True and result["closed_in_eplan"]["verified"]
+    assert result["success"] is True and result["closed_in_eplan"]["was_open"]
+    assert calls == [os.path.abspath(clone)]
     assert [os.path.splitext(p)[1] for p in order] == [".edb", ".elk"]
 
 
-def test_discard_proceeds_when_nothing_open(eplan, clone):
+def test_discard_proceeds_when_nothing_open(eplan, clone, monkeypatch):
+    _closer(monkeypatch, {"success": True, "was_open": False})
     result = fixtures.scratch_project_discard(clone)
     assert result["success"] is True
     assert not os.path.exists(clone)
 
 
 def test_discard_retries_locked_edb_and_keeps_elk(eplan, clone, monkeypatch):
+    _closer(monkeypatch, {"success": True, "was_open": False})
     rmtree = Mock(side_effect=PermissionError("locked"))
     monkeypatch.setattr(fixtures.shutil, "rmtree", rmtree)
     monkeypatch.setattr(fixtures.time, "sleep", lambda s: None)
@@ -309,6 +319,50 @@ def test_discard_retries_locked_edb_and_keeps_elk(eplan, clone, monkeypatch):
     assert rmtree.call_count == 5
     assert os.path.exists(clone), ".elk must survive a failed .edb delete"
 
+
+# --- _close_scratch_in_eplan: closes ONE project by path and checks the others survived ---
+
+def _script_result(monkeypatch, result):
+    from api.actions import live
+    seen = {}
+
+    def fake(script, timeout=None, **kw):
+        seen["script"] = script
+        return result
+    monkeypatch.setattr(live, "_execute_script", fake)
+    return seen
+
+
+def test_close_by_path_never_uses_the_focus_action(monkeypatch, tmp_path):
+    elk = str(tmp_path / "Clone.elk")
+    seen = _script_result(monkeypatch, {"success": True, "results": {
+        "success": True, "before": [elk, "X:\\Real.elk"], "after": ["X:\\Real.elk"]}})
+    from api.actions import target
+    target.set_target("X:\\Pinned.elk")
+    try:
+        out = fixtures._close_scratch_in_eplan(elk)
+        assert target.get() == "X:\\Pinned.elk"          # the pinned target is restored
+    finally:
+        target.set_target("")
+    assert out["success"] and out["was_open"]
+    assert "XPrjActionProjectClose" not in seen["script"]
+    assert '"Close"' in seen["script"] and "Clone.elk" in seen["script"]   # resolved by path
+
+
+def test_close_by_path_reports_other_projects_it_closed(monkeypatch, tmp_path):
+    elk = str(tmp_path / "Clone.elk")
+    _script_result(monkeypatch, {"success": True, "results": {
+        "success": True, "before": [elk, "X:\\Real.elk"], "after": []}})
+    out = fixtures._close_scratch_in_eplan(elk)
+    assert out["success"] is False and out["errorType"] == "ClosedOtherProjects"
+    assert "real.elk" in out["error"].lower()
+
+
+def test_close_by_path_not_open_is_fine(monkeypatch, tmp_path):
+    _script_result(monkeypatch, {"success": False, "error":
+        "Exception: Target project is not open in EPLAN: 'x'. Open projects: (none)."})
+    out = fixtures._close_scratch_in_eplan(str(tmp_path / "Clone.elk"))
+    assert out == {"success": True, "was_open": False}
 
 # ---------------------------------------------------------------------------
 # app_restart
