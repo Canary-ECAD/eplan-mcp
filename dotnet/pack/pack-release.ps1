@@ -124,5 +124,5 @@ $sums | Write-Host
 Write-Host ""
 Write-Host "Publish with (the first flavor creates the release, the second uploads to it):"
 Write-Host ("  gh release create host-v$version --title `"Script host $version`" " +
-            "--notes `"EplanMcp script host $version: net8 for EPLAN 2027+, netfx for EPLAN 2026.`"")
+            "--notes `"EplanMcp script host ${version}: net8 for EPLAN 2027+, netfx for EPLAN 2026.`"")
 Write-Host ("  gh release upload host-v$version `"$addonZip`" `"$offlineZip`" `"$sumsFile`"")
