@@ -28,6 +28,9 @@ def contract():
     """The published contract: {"mode", "tools": [{name, annotations, facts}]}."""
     # Extensions are site-specific: they never belong in the published file.
     os.environ.pop("EPLAN_MCP_EXTENSIONS", None)
+    # The contract lists every built-in tool, opt-in ones included (they are off by default at
+    # run time; see server.OPT_IN_TOOLS).
+    os.environ["EPLAN_MCP_ENABLE_TOOLS"] = "all"
     import server
     from tool_annotations import META_KEY
 

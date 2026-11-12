@@ -241,6 +241,27 @@ delivers EPLAN's own error text, the flag turns diagnostics off rather than
 degrading them. Use it to get unstuck on a new EPLAN version, not as a
 steady state.
 
+## Opt-in tools (`EPLAN_MCP_ENABLE_TOOLS`)
+
+Six tools act outside a project's data, so they are not registered (in any mode) until a person
+lists them for the server process, comma-separated, or sets `all`:
+
+| Tool | Why it is opt-in |
+|---|---|
+| `eplan_ui_drive` | clicks, types and sends keys to EPLAN's dialogs |
+| `eplan_ui_dismiss_watch_start` | keeps clicking dialog buttons from a background process |
+| `eplan_addin_build` | runs the add-in projects' MSBuild code |
+| `eplan_addin_deploy` | runs a deploy command that can replace DLLs other EPLAN users load |
+| `eplan_addin_update` | builds, deploys and can shut down and relaunch EPLAN |
+| `eplan_scratch_symbols_create` | repoints the user's `$(MD_SYMBOLS)` setting |
+
+Their cleanup tools (`eplan_ui_dismiss_watch_stop`, `eplan_scratch_symbols_restore` / `_purge` /
+`_status`) are always on. The server's startup line lists the ones that are off.
+
+```json
+"env": { "EPLAN_MCP_ENABLE_TOOLS": "eplan_ui_drive,eplan_ui_dismiss_watch_start" }
+```
+
 ## Discovery mode (`EPLAN_MCP_MODE`)
 
 Every MCP request carries the **whole tool list**. With one MCP tool per

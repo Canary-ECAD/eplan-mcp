@@ -22,6 +22,10 @@ _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _SERVER_ROOT = os.path.dirname(_TESTS_DIR)                    # python/
 _PACKAGE_DIR = os.path.join(_SERVER_ROOT, "mcp_server")       # its mcp_server/
 
+# The suite covers every tool, so the opt-in ones (server.OPT_IN_TOOLS) are switched on before
+# server is first imported; test_opt_in_tools_offline.py checks the default-off behaviour.
+os.environ.setdefault("EPLAN_MCP_ENABLE_TOOLS", "all")
+
 for _path in (_PACKAGE_DIR, _SERVER_ROOT):
     if _path not in sys.path:
         sys.path.insert(0, _path)

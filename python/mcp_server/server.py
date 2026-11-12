@@ -90,6 +90,37 @@ def _resolve_mode(raw=None):
 MODE = _resolve_mode(os.environ.get("EPLAN_MCP_MODE"))
 
 
+# Tools that act outside a project's data - they click in EPLAN's windows, run build code, replace
+# DLLs other users load, restart EPLAN or repoint a user setting - are off until a person lists
+# them in EPLAN_MCP_ENABLE_TOOLS (comma-separated names, or "all") for the server process. Off
+# means not registered at all, so discovery mode's eplan_tools_call cannot reach them either.
+# Their cleanup counterparts (ui_dismiss_watch_stop, scratch_symbols_restore/_purge/_status)
+# stay on, so a run started before the switch was turned off can always be undone.
+OPT_IN_ENV = "EPLAN_MCP_ENABLE_TOOLS"
+OPT_IN_TOOLS = {
+    "eplan_ui_drive": "clicks, types and sends keys to EPLAN's dialogs",
+    "eplan_ui_dismiss_watch_start": "keeps clicking dialog buttons from a background process",
+    "eplan_addin_build": "runs the add-in projects' MSBuild code",
+    "eplan_addin_deploy": "runs a deploy command that can replace DLLs other EPLAN users load",
+    "eplan_addin_update": "builds, deploys and can shut down and relaunch EPLAN",
+    "eplan_scratch_symbols_create": "repoints the user's $(MD_SYMBOLS) setting",
+}
+
+
+def _opt_in_enabled(tool_name, env=None):
+    """Is an opt-in tool switched on? Non-opt-in tools are always on."""
+    if tool_name not in OPT_IN_TOOLS:
+        return True
+    raw = os.environ.get(OPT_IN_ENV, "") if env is None else env
+    wanted = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return "all" in wanted or tool_name.lower() in wanted
+
+
+def disabled_opt_in_tools(env=None):
+    """{name: reason} of the opt-in tools that are switched off."""
+    return {name: why for name, why in OPT_IN_TOOLS.items() if not _opt_in_enabled(name, env)}
+
+
 def _is_published(tool_name, mode):
     """Does this tool get its own MCP tool definition in this mode?"""
     if mode != "discovery":
@@ -413,6 +444,8 @@ def register_actions(actions_module, prefix="eplan_", app=None, registry=None, m
             continue
 
         tool_name = f"{prefix}{func_name}"
+        if not _opt_in_enabled(tool_name):
+            continue        # see OPT_IN_TOOLS: not registered, so not callable in any mode
         published = publish and _is_published(tool_name, mode)
 
         if registry is not None:
@@ -656,6 +689,9 @@ if __name__ == "__main__":
     _log("-" * 40)
     _log(f"Mode: {MODE} ({len(REGISTRY.published_names())} of {len(REGISTRY)} "
           f"tools published)")
+    _off = disabled_opt_in_tools()
+    if _off:
+        _log(f"Off until listed in {OPT_IN_ENV}: {', '.join(sorted(_off))}")
     if MODE == "discovery":
         _log("Hidden tools are reachable via eplan_tools_search / "
               "eplan_tools_describe / eplan_tools_call")
