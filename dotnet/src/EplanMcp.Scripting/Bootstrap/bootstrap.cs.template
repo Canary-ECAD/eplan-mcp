@@ -7,6 +7,13 @@
 // Reflection only, on purpose: EPLAN's script engine compiles against a fixed reference list that
 // has neither the EPLAN data model nor System.Runtime.Loader.
 //
+// .NET Framework (EPLAN 2026) has no load contexts, and it never loads from bytes: EPLAN 2026's own
+// AssemblyResolve handlers run before any other and throw on an assembly without a file location
+// (measured on 2026.0.3). So each verified file is copied to a folder named after the manifest's
+// hash (the build output is never locked) and loaded from there, once per process; the set is kept
+// in AppDomain data and served to later binds by a resolver this file installs (EPLAN.exe.config has
+// no binding redirects for Roslyn's dependencies). Nothing unloads there.
+//
 // Licensing: the host assemblies are unsigned, so this path needs the same EPLAN API developer
 // license as the add-in. It exists to avoid registration and restarts, not to avoid signing.
 using System;
@@ -33,7 +40,12 @@ public class EplanMcpBootstrap
             string manifestText = File.ReadAllText(Path.Combine(hostDir, "eplanmcp-manifest.txt"));
             string alcName = "EplanMcp.Core/" + coreVersion + "/" + Hex(Sha(Encoding.UTF8.GetBytes(manifestText))).Substring(0, 16);
 
-            Type alcType = typeof(object).Assembly.GetType("System.Runtime.Loader.AssemblyLoadContext", true);
+            Type alcType = typeof(object).Assembly.GetType("System.Runtime.Loader.AssemblyLoadContext", false);
+            if (alcType == null)
+            {
+                RunOnFramework(hostDir, manifestText, alcName, mode, requestPath, resultPath);
+                return;
+            }
             object alc = null;
             foreach (object c in (IEnumerable)alcType.GetProperty("All").GetValue(null, null))
             {
@@ -41,21 +53,7 @@ public class EplanMcpBootstrap
             }
             if (alc == null)
             {
-                // Read and verify everything first; only a complete, verified set is ever loaded.
-                List<byte[]> images = new List<byte[]>();
-                foreach (string raw in manifestText.Split('\n'))
-                {
-                    string line = raw.Trim();
-                    if (line.Length == 0 || line.StartsWith("#")) continue;
-                    int space = line.IndexOf(' ');
-                    if (space < 0) throw new InvalidOperationException("Bad manifest line: " + line);
-                    string expected = line.Substring(0, space).Trim().ToLowerInvariant();
-                    string file = line.Substring(space + 1).Trim();
-                    byte[] bytes = File.ReadAllBytes(Path.Combine(hostDir, file));
-                    if (Hex(Sha(bytes)) != expected)
-                        throw new InvalidOperationException("Host file " + file + " does not match its manifest hash. Rebuild or reinstall the host.");
-                    images.Add(bytes);
-                }
+                List<byte[]> images = ReadVerified(hostDir, manifestText);
                 alc = Activator.CreateInstance(alcType, new object[] { alcName, false });
                 MethodInfo loadFromStream = alcType.GetMethod("LoadFromStream", new Type[] { typeof(Stream) });
                 foreach (byte[] bytes in images)
@@ -70,7 +68,7 @@ public class EplanMcpBootstrap
             if (scripting == null) throw new InvalidOperationException("EplanMcp.Scripting is not in the host manifest.");
             Type entry = scripting.GetType("EplanMcp.Scripting.HostEntry", true);
             if (mode == "hello")
-                entry.GetMethod("HelloFromBootstrap").Invoke(null, new object[] { resultPath });
+                entry.GetMethod("HelloFromBootstrap", new Type[] { typeof(string) }).Invoke(null, new object[] { resultPath });
             else
                 entry.GetMethod("RunFromBootstrap").Invoke(null, new object[] { requestPath, resultPath, hostDir });
         }
@@ -78,8 +76,121 @@ public class EplanMcpBootstrap
         {
             Exception inner = e;
             while (inner is TargetInvocationException && inner.InnerException != null) inner = inner.InnerException;
-            WriteError(resultPath, inner.GetType().Name + ": " + inner.Message);
+            WriteError(resultPath, inner.GetType().Name + ": " + inner.Message + Where(inner));
         }
+    }
+
+    /// <summary>Reads every file the manifest lists and checks its hash; only a complete, verified
+    /// set is ever loaded. <paramref name="names"/>, when given, gets each file's name.</summary>
+    private static List<byte[]> ReadVerified(string hostDir, string manifestText)
+    {
+        return ReadVerified(hostDir, manifestText, null);
+    }
+
+    private static List<byte[]> ReadVerified(string hostDir, string manifestText, List<string> names)
+    {
+        List<byte[]> images = new List<byte[]>();
+        foreach (string raw in manifestText.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith("#")) continue;
+            int space = line.IndexOf(' ');
+            if (space < 0) throw new InvalidOperationException("Bad manifest line: " + line);
+            string expected = line.Substring(0, space).Trim().ToLowerInvariant();
+            string file = line.Substring(space + 1).Trim();
+            byte[] bytes = File.ReadAllBytes(Path.Combine(hostDir, file));
+            if (Hex(Sha(bytes)) != expected)
+                throw new InvalidOperationException("Host file " + file + " does not match its manifest hash. Rebuild or reinstall the host.");
+            images.Add(bytes);
+            if (names != null) names.Add(file);
+        }
+        return images;
+    }
+
+    private const string CurrentHostKey = "EplanMcp.Host";
+    private const string ResolverKey = "EplanMcp.HostResolver";
+
+    /// <summary>.NET Framework: no load contexts and no unloading. The verified set is loaded once
+    /// per manifest hash; a rebuilt host loads beside the old one, and the resolver serves the newest.
+    /// Restart EPLAN after a host update to drop the old copy.</summary>
+    private static void RunOnFramework(string hostDir, string manifestText, string setName, string mode, string requestPath, string resultPath)
+    {
+        AppDomain domain = AppDomain.CurrentDomain;
+        Dictionary<string, Assembly> host = domain.GetData(setName) as Dictionary<string, Assembly>;
+        if (host == null)
+        {
+            List<string> names = new List<string>();
+            List<byte[]> images = ReadVerified(hostDir, manifestText, names);
+            string copies = Path.Combine(Path.Combine(Path.GetTempPath(), "EplanMcp"),
+                "host-" + setName.Substring(setName.LastIndexOf('/') + 1));
+            Directory.CreateDirectory(copies);
+            List<string> paths = new List<string>();
+            for (int i = 0; i < images.Count; i++)
+                paths.Add(VerifiedCopy(Path.Combine(copies, names[i]), images[i]));
+            // Every file is in place before the first load, so each one's references are found
+            // beside it.
+            host = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+            foreach (string path in paths)
+            {
+                Assembly a = Assembly.LoadFrom(path);
+                host[a.GetName().Name] = a;
+            }
+            domain.SetData(setName, host);
+        }
+        domain.SetData(CurrentHostKey, host);
+        if (domain.GetData(ResolverKey) == null)
+        {
+            domain.SetData(ResolverKey, "installed");
+            domain.AssemblyResolve += ResolveHost;
+        }
+        Assembly scripting;
+        if (!host.TryGetValue("EplanMcp.Scripting", out scripting))
+            throw new InvalidOperationException("EplanMcp.Scripting is not in the host manifest.");
+        Type entry = scripting.GetType("EplanMcp.Scripting.HostEntry", true);
+        if (mode == "hello")
+            entry.GetMethod("HelloFromBootstrap", new Type[] { typeof(string), typeof(string) }).Invoke(null, new object[] { resultPath, hostDir });
+        else
+            entry.GetMethod("RunFromBootstrap").Invoke(null, new object[] { requestPath, resultPath, hostDir });
+    }
+
+    /// <summary>Writes the verified bytes to <paramref name="path"/> unless an identical file is
+    /// there (another EPLAN may hold it loaded). The folder is the user's own, like the host's.</summary>
+    private static string VerifiedCopy(string path, byte[] bytes)
+    {
+        string expected = Hex(Sha(bytes));
+        if (File.Exists(path) && Hex(Sha(File.ReadAllBytes(path))) == expected) return path;
+        string tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        File.WriteAllBytes(tmp, bytes);
+        if (File.Exists(path)) File.Delete(path);
+        File.Move(tmp, path);
+        return path;
+    }
+
+    /// <summary>The current host set first (whatever version the reference names: there are no
+    /// binding redirects), then anything already loaded.</summary>
+    private static Assembly ResolveHost(object sender, ResolveEventArgs args)
+    {
+        string name = new AssemblyName(args.Name).Name;
+        Dictionary<string, Assembly> host = AppDomain.CurrentDomain.GetData(CurrentHostKey) as Dictionary<string, Assembly>;
+        Assembly found;
+        if (host != null && host.TryGetValue(name, out found)) return found;
+        foreach (Assembly loaded in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            if (string.Equals(loaded.GetName().Name, name, StringComparison.OrdinalIgnoreCase)) return loaded;
+        }
+        return null;
+    }
+
+    /// <summary>The first frames of the stack, so a failure inside the host says where.</summary>
+    private static string Where(Exception e)
+    {
+        string stack = e.StackTrace;
+        if (string.IsNullOrEmpty(stack)) return "";
+        string[] lines = stack.Replace("\r", "").Split('\n');
+        StringBuilder sb = new StringBuilder(" | at");
+        for (int i = 0; i < lines.Length && i < 4; i++)
+            sb.Append(' ').Append(lines[i].Trim().Replace("at ", ""));
+        return sb.ToString();
     }
 
     private static void WriteError(string resultPath, string message)

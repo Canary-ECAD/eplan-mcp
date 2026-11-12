@@ -47,7 +47,7 @@ namespace EplanMcp.Scripting.Core
                 ["at"] = DateTime.UtcNow.ToString("o"),
                 ["user"] = Environment.UserName,
                 ["machine"] = Environment.MachineName,
-                ["pid"] = Environment.ProcessId,
+                ["pid"] = Compat.ProcessId,
             };
             var file = Path.Combine(Directory, "audit-" + DateTime.UtcNow.ToString("yyyy-MM") + ".jsonl");
             File.AppendAllText(file, Json.Serialize(line) + "\n", Encoding.UTF8);

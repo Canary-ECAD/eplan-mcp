@@ -3,7 +3,7 @@
        descriptions, parts, macro boxes, selection, layers and symbol libraries. Loaded by the host
        beside EplanMcp.Scripting, so every script can call it. Needs an installed EPLAN to build. -->
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>$(EplanTargetFramework)</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>EplanMcp.Eplan</RootNamespace>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -11,7 +11,7 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
     <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
   </ItemGroup>
   <ItemGroup>

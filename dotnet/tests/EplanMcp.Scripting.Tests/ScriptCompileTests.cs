@@ -35,7 +35,7 @@ namespace EplanMcp.Scripting.Tests
             var root = DotnetRoot();
             return Directory.GetFiles(Path.Combine(root, "scripts"), "*.cs")
                 .Concat(Directory.GetFiles(Path.Combine(root, "tests", "live"), "*.cs"))
-                .Select(p => new object[] { Path.GetRelativePath(root, p) });
+                .Select(p => new object[] { p.Substring(root.TrimEnd(Path.DirectorySeparatorChar).Length + 1) });
         }
 
         [Theory]

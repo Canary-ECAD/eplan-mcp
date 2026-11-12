@@ -121,19 +121,26 @@ previous one.
 #### Script host
 
 The script host runs ordinary, typed C# against the EPLAN API (`using Eplan.EplApi.DataModel;`
-works) inside EPLAN, with no build and no restart. It compiles with EPLAN's own Roslyn, checks
-the script for unsafe calls, runs it in a collectible context and tries to unload it. The same script runs
+works) inside EPLAN, with no build and no restart. It compiles the script with Roslyn, checks it
+for unsafe calls and runs it. The same script runs
 in three runtimes: a registered add-in, a bootstrap through `ExecuteScript` (nothing to register),
 or an offline host that needs no EPLAN window and works on closed projects. Writes go only to
 scratch clones unless a person enables real-project writes and approves each saved script. The
 library in `dotnet/scripts/` ships ready-made tools for texts, line styles, functions, macro boxes
 and parts. All runtimes need the EPLAN API developer license.
 
-**EPLAN 2027 or newer only.** The host is .NET 8; EPLAN 2026 and older run on .NET Framework 4.8
-and cannot load it, so `eplan_script_hello` and `eplan_script_run` refuse there and point at
-`eplan_execute_custom_script` and the `eplan_live_*` tools. The scripts themselves compile against
-both API naming schemes (`Eplan.EplApi.*Netu.dll` on 2027, `*u.dll` on 2026), which
-`dotnet/` detects from EPLAN's `Bin` folder (`-p:EplanApiSuffix=` forces it).
+**EPLAN 2026 and 2027+.** The host comes in two flavors, one per framework EPLAN runs on, and the
+server picks the one the target EPLAN loads:
+
+| Flavor | EPLAN | Roslyn | After a run |
+|---|---|---|---|
+| `net8` | 2027 or newer (.NET 8) | EPLAN's own | the script is unloaded (collectible context) |
+| `netfx` | 2026 (.NET Framework 4.8.1) | shipped with the host | the script stays loaded until EPLAN closes; running the same script again reuses it |
+
+`dotnet/` builds the flavor of the EPLAN it finds (`Directory.Build.props` reads the API naming
+scheme from `Bin`: `Eplan.EplApi.*Netu.dll` on 2027, `*u.dll` on 2026; `-p:EplanTargetFramework=`
+forces it). EPLAN 2025 and older are refused up front and pointed at `eplan_execute_custom_script`
+and the `eplan_live_*` tools.
 
 ![Script host: MCP client, Python server, three runtimes, EPLAN API](docs/images/script-host-architecture.svg)
 
@@ -141,10 +148,11 @@ Quick start (the server folder is now `python/`: see the "Moved" note in
 [Quick start](#local-eplan-automation-p8)):
 
 1. `eplan_script_host_install`: downloads the host release (GitHub tag `host-v<version>`, separate
-   from the server's `vX.Y.Z` tags), checks its SHA-256 sums and installs it under
-   `~/.eplan-mcp/host/<version>`. The script tools also do this on first use. Maintainers build
-   and publish that release on a machine with EPLAN 2027 with `dotnet/pack/pack-release.ps1`, which
-   prints the `gh release create` command.
+   from the server's `vX.Y.Z` tags) for the target EPLAN's flavor, checks its SHA-256 sums and
+   installs it under `~/.eplan-mcp/host/<version>/<flavor>`. The script tools also do this on first
+   use. Maintainers build each flavor on a machine with that EPLAN (2027 for `net8`, 2026 for
+   `netfx`) with `dotnet/pack/pack-release.ps1`, which prints the `gh release` commands; both
+   flavors go to the same release.
 2. `eplan_script_hello`: reports the host version, the runtime that answers, EPLAN and the license.
 3. Run a library script on a scratch clone. Pass `dry_run=True` to see what a writing script would
    change:

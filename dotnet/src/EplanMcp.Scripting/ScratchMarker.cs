@@ -22,7 +22,7 @@ namespace EplanMcp.Scripting
         {
             why = "";
             if (string.IsNullOrEmpty(projectLinkFile)) { why = "the project has no link file"; return false; }
-            var marker = PathFor(projectLinkFile);
+            var marker = PathFor(projectLinkFile!);
             if (!File.Exists(marker)) { why = "no marker file"; return false; }
             try
             {
@@ -30,7 +30,7 @@ namespace EplanMcp.Scripting
                 var root = doc.RootElement;
                 if (!root.TryGetProperty("kind", out var k) || k.GetString() != Kind) { why = "its marker file is not an EplanMcp marker"; return false; }
                 if (!root.TryGetProperty("nonce", out var n) || string.IsNullOrWhiteSpace(n.GetString())) { why = "its marker file has no nonce"; return false; }
-                if (!root.TryGetProperty("project_link", out var p) || !SamePath(p.GetString(), projectLinkFile))
+                if (!root.TryGetProperty("project_link", out var p) || !SamePath(p.GetString(), projectLinkFile!))
                 {
                     why = "its marker file belongs to a different project";
                     return false;

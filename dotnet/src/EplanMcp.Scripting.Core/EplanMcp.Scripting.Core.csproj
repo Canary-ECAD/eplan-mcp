@@ -2,11 +2,13 @@
   <!-- Compile, check, load, run and unload scripts. Deliberately EPLAN-free so it is unit-tested on
        any machine; everything that touches EPLAN goes through IRunEnvironment. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net481</TargetFrameworks>
     <RootNamespace>EplanMcp.Scripting.Core</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <!-- In the box on .NET 8; a package on .NET Framework. -->
+    <PackageReference Include="System.Text.Json" Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'" />
     <ProjectReference Include="..\EplanMcp.Contracts\EplanMcp.Contracts.csproj" />
     <InternalsVisibleTo Include="EplanMcp.Scripting.Core.Tests" />
   </ItemGroup>

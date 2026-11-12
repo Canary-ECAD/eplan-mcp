@@ -23,22 +23,40 @@ namespace EplanMcp.Scripting.Core.Tests
             return Path.Combine(dir!, "src", "EplanMcp.Scripting", "Bootstrap", "bootstrap.cs.template");
         }
 
-        [Fact]
-        public void Filled_template_compiles_with_only_system_and_the_start_attribute()
+        /// <summary>The runtime's own assemblies: the trusted platform list on .NET 8, the
+        /// framework folder on .NET Framework.</summary>
+        private static System.Collections.Generic.IEnumerable<MetadataReference> RuntimeReferences()
+        {
+            var files = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string tpa
+                ? tpa.Split(Path.PathSeparator)
+                : Directory.GetFiles(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "*.dll");
+            foreach (var file in files)
+            {
+                MetadataReference? reference = null;
+                try { System.Reflection.AssemblyName.GetAssemblyName(file); reference = MetadataReference.CreateFromFile(file); }
+                catch (BadImageFormatException) { }
+                if (reference != null) yield return reference;
+            }
+        }
+
+        /// <summary>EPLAN 2026's script engine is the .NET Framework one, so the template sticks to C# 5.</summary>
+        [Theory]
+        [InlineData("run")]
+        [InlineData("hello")]
+        public void Filled_template_compiles_as_csharp_5_with_only_system_and_the_start_attribute(string mode)
         {
             var text = File.ReadAllText(TemplatePath())
                 .Replace("{{HOST_DIR}}", @"C:\host")
                 .Replace("{{REQUEST_PATH}}", @"C:\run\request.json")
                 .Replace("{{RESULT_PATH}}", @"C:\run\result.json")
-                .Replace("{{MODE}}", "run")
+                .Replace("{{MODE}}", mode)
                 .Replace("{{CORE_VERSION}}", "0.1.0");
             Assert.DoesNotContain("{{", text);
             const string stub = "namespace Eplan.EplApi.Scripting { public sealed class StartAttribute : System.Attribute { } }";
 
-            var refs = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-                .Select(p => MetadataReference.CreateFromFile(p));
+            var csharp5 = new CSharpParseOptions(LanguageVersion.CSharp5);
             var comp = CSharpCompilation.Create("bootstrap",
-                new[] { CSharpSyntaxTree.ParseText(text), CSharpSyntaxTree.ParseText(stub) }, refs,
+                new[] { CSharpSyntaxTree.ParseText(text, csharp5), CSharpSyntaxTree.ParseText(stub, csharp5) }, RuntimeReferences(),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
             var errors = comp.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
             Assert.True(errors.Count == 0, string.Join("\n", errors));

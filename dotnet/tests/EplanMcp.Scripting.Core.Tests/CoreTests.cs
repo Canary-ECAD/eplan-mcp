@@ -96,7 +96,7 @@ namespace EplanMcp.Scripting.Core.Tests
             Assert.True(res.Ok, res.Error);
             Assert.Equal("done", res.Phase);
             Assert.Equal(6, ((JsonNode)res.Result!)["sum"]!.GetValue<int>());
-            Assert.True(res.Unloaded);
+            AssertUnloaded(res);
         }
 
         [Fact]
@@ -130,7 +130,7 @@ namespace EplanMcp.Scripting.Core.Tests
             Assert.False(res.Ok);
             Assert.Equal("run", res.Phase);
             Assert.Contains("boom", res.Error);
-            Assert.True(res.Unloaded);
+            AssertUnloaded(res);
         }
 
         [Fact]
@@ -142,7 +142,7 @@ namespace EplanMcp.Scripting.Core.Tests
             Assert.Null(res.Error);
             Assert.Equal("page 'X' not found", ((JsonNode)res.Result!)["error"]!.GetValue<string>());
             Assert.DoesNotContain(" at ", ((JsonNode)res.Result!).ToJsonString());
-            Assert.True(res.Unloaded);
+            AssertUnloaded(res);
         }
 
         [Fact]
@@ -159,7 +159,7 @@ namespace EplanMcp.Scripting.Core.Tests
             var res = RunPipeline.Execute(Req("while (true) { ctx.Budget.Check(); }", r => r.BudgetSeconds = 0.3), new TestEnvironment(), Audit);
             Assert.False(res.Ok);
             Assert.Contains("budget", res.Error);
-            Assert.True(res.Unloaded);
+            AssertUnloaded(res);
         }
 
         [Fact]
@@ -313,8 +313,16 @@ namespace EplanMcp.Scripting.Core.Tests
         {
             var alive = new object();
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            Assert.False(ScriptRunner.WaitForUnload(new WeakReference(alive)));
-            Assert.InRange(sw.ElapsedMilliseconds, 500, 5000);   // about a second of retries, not forever
+            if (ScriptRunner.CanUnload)
+            {
+                Assert.False(ScriptRunner.WaitForUnload(new WeakReference(alive)));
+                Assert.InRange(sw.ElapsedMilliseconds, 500, 5000);   // about a second of retries, not forever
+            }
+            else
+            {
+                Assert.Null(ScriptRunner.WaitForUnload(new WeakReference(alive)));   // nothing to wait for
+                Assert.InRange(sw.ElapsedMilliseconds, 0, 100);
+            }
             GC.KeepAlive(alive);
         }
 
@@ -439,7 +447,57 @@ namespace EplanMcp.Scripting.Core.Tests
             var b = RunPipeline.Execute(Req("return 7;"), env, Audit);
             Assert.True(a.Ok && b.Ok);
             Assert.Empty(b.Diagnostics);
-            Assert.True(b.Unloaded);
+            AssertUnloaded(b);
         }
+
+        /// <summary>.NET 8 unloads every script; .NET Framework (EPLAN 2026) cannot, and says so.</summary>
+        private static void AssertUnloaded(RunResult res)
+        {
+            if (ScriptRunner.CanUnload) Assert.True(res.Unloaded);
+            else
+            {
+                Assert.Null(res.Unloaded);
+                Assert.Contains(res.Log, l => l.Contains("cannot unload"));
+            }
+        }
+
+        [Fact]
+        public void Flavor_matches_the_framework()
+        {
+#if NETFRAMEWORK
+            Assert.Equal("netfx", ScriptRunner.Flavor);
+            Assert.False(ScriptRunner.CanUnload);
+#else
+            Assert.Equal("net8", ScriptRunner.Flavor);
+            Assert.True(ScriptRunner.CanUnload);
+#endif
+        }
+
+#if NETFRAMEWORK
+        [Fact]
+        public void Same_script_reuses_its_assembly_and_a_changed_one_adds_one()
+        {
+            var env = new TestEnvironment();
+            var first = RunPipeline.Execute(Req("return 1001;"), env, Audit);
+            Assert.True(first.Ok, first.Error);
+            int afterFirst = ScriptRunner.LoadedScriptCount;
+            var again = RunPipeline.Execute(Req("return 1001;"), env, Audit);
+            Assert.True(again.Ok, again.Error);
+            Assert.Equal(afterFirst, ScriptRunner.LoadedScriptCount);
+            var changed = RunPipeline.Execute(Req("return 1002;"), env, Audit);
+            Assert.True(changed.Ok, changed.Error);
+            Assert.Equal(afterFirst + 1, ScriptRunner.LoadedScriptCount);
+        }
+
+        [Fact]
+        public void Resolver_answers_by_simple_name_whatever_the_version()
+        {
+            var loaded = typeof(ScriptRunner).Assembly.GetName();
+            var asked = new System.Reflection.AssemblyName(loaded.Name + ", Version=99.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var found = HostAssemblyResolver.Resolve(null, new ResolveEventArgs(asked.FullName));
+            Assert.Same(typeof(ScriptRunner).Assembly, found);
+            Assert.Null(HostAssemblyResolver.Resolve(null, new ResolveEventArgs("EplanMcp.NoSuchAssembly, Version=1.0.0.0")));
+        }
+#endif
     }
 }

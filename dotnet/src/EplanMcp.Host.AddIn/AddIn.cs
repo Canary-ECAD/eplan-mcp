@@ -17,7 +17,14 @@ namespace EplanMcp.Host.AddIn
         }
 
         public bool OnUnregister() => true;
-        public bool OnInit() => true;
+
+        public bool OnInit()
+        {
+            try { RunScriptAction.PrepareFramework(); }
+            catch (Exception) { }   // reported by the first action instead
+            return true;
+        }
+
         public bool OnInitGui() => true;
         public bool OnExit() => true;
     }
@@ -43,6 +50,7 @@ namespace EplanMcp.Host.AddIn
             if (string.IsNullOrEmpty(request) || string.IsNullOrEmpty(result)) return false;
             try
             {
+                PrepareFramework();
                 LoadHelpers();
                 RunHost(request!, result!);
             }
@@ -57,6 +65,16 @@ namespace EplanMcp.Host.AddIn
 
         // Each in its own non-inlined method: a missing assembly then fails at this call, inside the
         // try above, instead of when EPLAN compiles Execute.
+
+        /// <summary>On .NET Framework (EPLAN 2026) the add-in's own Roslyn and System.Text.Json sit
+        /// beside it, and EPLAN.exe.config has no binding redirects for their dependencies: resolve
+        /// them by simple name from this folder. Nothing on .NET 8.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void PrepareFramework()
+        {
+            EplanMcp.Scripting.Core.HostAssemblyResolver.AddFolder(Path.GetDirectoryName(typeof(RunScriptAction).Assembly.Location));
+            EplanMcp.Scripting.Core.HostAssemblyResolver.Install();
+        }
 
         /// <summary>Scripts compile against the assemblies already loaded; load the helper library first.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -76,7 +94,12 @@ namespace EplanMcp.Host.AddIn
                 var dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllText(path + ".tmp", text, new UTF8Encoding(false));
+#if NETFRAMEWORK
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(path + ".tmp", path);
+#else
                 File.Move(path + ".tmp", path, true);
+#endif
             }
             catch (Exception) { }
         }
@@ -112,7 +135,11 @@ namespace EplanMcp.Host.AddIn
         {
             var result = RunScriptAction.Param(ctx, "result");
             if (string.IsNullOrEmpty(result)) return false;
-            try { HelloHost(result!); }
+            try
+            {
+                RunScriptAction.PrepareFramework();
+                HelloHost(result!);
+            }
             catch (Exception e) { RunScriptAction.WriteFallback(result!, "The script host could not start in the add-in (" + e.GetType().Name + ": " + e.Message + ")."); }
             return true;
         }

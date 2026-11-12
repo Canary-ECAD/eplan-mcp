@@ -1,19 +1,37 @@
 # Writing EPLAN scripts for the script host
 
-A script is ordinary C# against the EPLAN API, compiled with EPLAN's own Roslyn and run inside the
-open EPLAN session, with no build and no restart. Run one with `eplan_script_run`.
+A script is ordinary C# against the EPLAN API, compiled with Roslyn and run inside the open EPLAN
+session, with no build and no restart. Run one with `eplan_script_run`.
 
 Three runtimes run the same scripts: the add-in (registered with `EplApiModuleActionNet`), the
 bootstrap (`ExecuteScript`, nothing registered) and the offline host (no EPLAN window, closed
 projects only, scripts with `@needs offline` or `@needs either`). `runtime="auto"` takes the add-in
 when it answers, else the bootstrap. All need the EPLAN API developer license.
 
-The host needs EPLAN 2027 or newer (.NET 8). On EPLAN 2026 and older (.NET Framework 4.8) the
-script tools refuse up front. Building `dotnet/` works against either install: the managed API is
-`Eplan.EplApi.*Netu.dll` on 2027 (its `*u.dll` are native twins that must never be referenced) and
-`Eplan.EplApi.*u.dll` on 2026. `Directory.Build.props` picks `EplanApiSuffix` from the `Bin`
-folder, and at run time `EplanApiAssemblies.InBin` applies the same rule, so ScriptCheck and the
-compile tests also check every library script against a 2026 API.
+## EPLAN 2026 and 2027
+
+The host has one flavor per framework EPLAN runs on, and the server picks the target EPLAN's:
+
+- **`net8`, EPLAN 2027+ (.NET 8).** The host uses EPLAN's own Roslyn; each script runs in a
+  collectible load context and is unloaded afterwards (`unloaded: true` in the result).
+- **`netfx`, EPLAN 2026 (.NET Framework 4.8.1).** EPLAN 2026 has no Roslyn, so the host ships it
+  (with System.Text.Json and their dependencies, all listed and hash-checked in the host manifest).
+  .NET Framework cannot unload an assembly from EPLAN's AppDomain, and EPLAN's objects cannot cross
+  into another one, so a script stays loaded until EPLAN closes: `unloaded` is `null` and the log
+  says so. The same script run again reuses its assembly; only a changed script adds one (a few KB).
+  EPLAN.exe.config has no binding redirects, so the host resolves its libraries by simple name.
+
+EPLAN 2025 and older are refused up front. Building `dotnet/` makes the flavor of the EPLAN it
+finds: the managed API is `Eplan.EplApi.*Netu.dll` on 2027 (its `*u.dll` are native twins that must
+never be referenced) and `Eplan.EplApi.*u.dll` on 2026. `Directory.Build.props` picks
+`EplanApiSuffix` and from it `EplanTargetFramework` (`net8.0-windows` or `net481`); at run time
+`EplanApiAssemblies.InBin` applies the same rule. `EplanMcp.Scripting.Core` and its tests build for
+both frameworks on any machine.
+
+One script can serve both: the host defines the symbols MSBuild would, `NETFRAMEWORK` and `NET481`
+on 2026, `NET`, `NET8_0` and `NET8_0_OR_GREATER` on 2027, so `#if NETFRAMEWORK` works in a script.
+Everything else (the library scripts, `ScriptContext`, the helpers in `EplanMcp.Eplan`) is the same
+on both.
 
 ![One run: header, compile, safety check, write gate, run, result, unload](../docs/images/script-run-flow.svg)
 

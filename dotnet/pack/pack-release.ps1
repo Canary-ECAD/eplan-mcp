@@ -4,12 +4,15 @@
 
 .DESCRIPTION
   EPLAN's API assemblies cannot be redistributed and are absent on hosted CI runners, so releases
-  are built here and uploaded as GitHub Release assets. Produces, under dotnet/artifacts/release/:
+  are built here and uploaded as GitHub Release assets. The host has one flavor per framework EPLAN
+  runs on, each built on a machine with that EPLAN: net8 (EPLAN 2027+, .NET 8) and netfx (EPLAN
+  2026, .NET Framework 4.8.1). Both go to the same release host-v<version>. Produces, under
+  dotnet/artifacts/release/:
 
-    EplanMcp-<version>-addon.zip    EPLAN add-on layout: EplanMcp/<version>/BIN + CFG/install.xml,
-                                    registered with eplan_register_addon(install_file=...CFG\install.xml)
-    EplanMcp-<version>-offline.zip  the offline host (EplanMcp.Host.Offline.exe and its DLLs)
-    SHA256SUMS.txt                  checksums of both zips
+    EplanMcp-<version>-<flavor>-addon.zip    EPLAN add-on layout: EplanMcp/<version>/BIN + CFG/install.xml,
+                                             registered with eplan_register_addon(install_file=...CFG\install.xml)
+    EplanMcp-<version>-<flavor>-offline.zip  the offline host (EplanMcp.Host.Offline.exe and its DLLs)
+    SHA256SUMS-<flavor>.txt                  checksums of both zips
 
 .PARAMETER EplanVersion
   The EPLAN version to build against (default: the one in Directory.Build.props).
@@ -24,16 +27,20 @@ $props = @("-c", "Release", "--no-incremental", "-p:ContinuousIntegrationBuild=t
            "-p:DebugType=none", "-p:DebugSymbols=false")
 if ($EplanVersion) { $props += "-p:EplanVersion=$EplanVersion" }
 
-# The host runs only inside a .NET 8 EPLAN (2027+). Built against an older EPLAN it compiles, but
-# binds to Eplan.EplApi.*u.dll and cannot load in 2027, nor in the .NET Framework EPLAN itself.
+# The flavor follows the EPLAN found: *Netu API (2027+) builds net8, *u API (2026) builds netfx,
+# exactly as Directory.Build.props decides. Older EPLANs are not supported.
 $probeVersion = $EplanVersion
 if (-not $probeVersion) {
     $m = [regex]::Match((Get-Content (Join-Path $root "Directory.Build.props") -Raw), "<EplanVersion[^>]*>([^<]+)</EplanVersion>")
     $probeVersion = $m.Groups[1].Value
 }
 $bin = Join-Path $env:ProgramW6432 "EPLAN\Platform\$probeVersion\Bin"
-if (-not (Test-Path (Join-Path $bin "Eplan.EplApi.BaseNetu.dll"))) {
-    throw "No .NET 8 EPLAN at $bin (Eplan.EplApi.BaseNetu.dll missing). Release builds need EPLAN 2027 or newer; pass -EplanVersion."
+if (Test-Path (Join-Path $bin "Eplan.EplApi.BaseNetu.dll")) {
+    $flavor = "net8"
+} elseif ((Test-Path (Join-Path $bin "Eplan.EplApi.Baseu.dll")) -and [int]$probeVersion.Split(".")[0] -ge 2026) {
+    $flavor = "netfx"
+} else {
+    throw "No EPLAN 2026 or 2027+ at $bin. Pass -EplanVersion (e.g. 2026.0.3 or 2027.0.3)."
 }
 
 dotnet build (Join-Path $root "src/EplanMcp.Host.AddIn") @props | Out-Host
@@ -43,6 +50,8 @@ if ($LASTEXITCODE) { throw "Offline host build failed." }
 
 $hostDir = Join-Path $root "artifacts/host"
 $version = (Get-Content (Join-Path $hostDir "eplanmcp-version.txt") -Raw).Trim()
+$built = (Get-Content (Join-Path $hostDir "eplanmcp-flavor.txt") -Raw).Trim()
+if ($built -ne $flavor) { throw "The host built as $built, but EPLAN $probeVersion needs $flavor." }
 $out = Join-Path $root "artifacts/release"
 $stage = Join-Path $out "stage"
 Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
@@ -50,7 +59,7 @@ $addon = Join-Path $stage "EplanMcp/$version"
 New-Item -ItemType Directory -Force (Join-Path $addon "BIN"), (Join-Path $addon "CFG") | Out-Null
 Copy-Item (Join-Path $hostDir "*") (Join-Path $addon "BIN") -Recurse -Exclude "*.pdb"
 
-$mainVersion = if ($EplanVersion) { $EplanVersion.Substring(0, 4) + ".*" } else { "2027.*" }
+$mainVersion = $probeVersion.Substring(0, 4) + ".*"
 @"
 <?xml version="1.0" encoding="utf-8"?>
 <Settings format="2">
@@ -98,19 +107,22 @@ $leaks = Get-ChildItem $stage -Recurse -File | Where-Object {
 }
 if ($leaks) { throw "Release files contain local paths or the user name: $($leaks.Name -join ', ')" }
 
-$addonZip = Join-Path $out "EplanMcp-$version-addon.zip"
-$offlineZip = Join-Path $out "EplanMcp-$version-offline.zip"
+$addonZip = Join-Path $out "EplanMcp-$version-$flavor-addon.zip"
+$offlineZip = Join-Path $out "EplanMcp-$version-$flavor-offline.zip"
+$sumsFile = Join-Path $out "SHA256SUMS-$flavor.txt"
 Compress-Archive -Path (Join-Path $stage "EplanMcp") -DestinationPath $addonZip
 Compress-Archive -Path (Join-Path $offlineStage "*") -DestinationPath $offlineZip
 $sums = Get-FileHash $addonZip, $offlineZip -Algorithm SHA256 |
     ForEach-Object { "{0}  {1}" -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) }
-$sums | Set-Content -Encoding ascii (Join-Path $out "SHA256SUMS.txt")
+$sums | Set-Content -Encoding ascii $sumsFile
 Remove-Item $stage -Recurse -Force
 Write-Host "Release artifacts in $out"
 $sums | Write-Host
 # Host releases use their own tag line (host-v<version>, see HOST_TAG_PREFIX in
 # python/mcp_server/api/actions/scripthost.py): it never triggers the server's release workflow.
+# Each flavor is uploaded from its own machine; whichever comes first creates the release.
 Write-Host ""
-Write-Host "Publish with:"
-Write-Host ("  gh release create host-v$version `"$addonZip`" `"$offlineZip`" `"$(Join-Path $out 'SHA256SUMS.txt')`" " +
-            "--title `"Script host $version`" --notes `"EplanMcp script host $version, built against EPLAN $probeVersion.`"")
+Write-Host "Publish with (the first flavor creates the release, the second uploads to it):"
+Write-Host ("  gh release create host-v$version --title `"Script host $version`" " +
+            "--notes `"EplanMcp script host $version: net8 for EPLAN 2027+, netfx for EPLAN 2026.`"")
+Write-Host ("  gh release upload host-v$version `"$addonZip`" `"$offlineZip`" `"$sumsFile`"")

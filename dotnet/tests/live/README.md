@@ -13,5 +13,7 @@ a **scratch clone** (`eplan_scratch_project_create`), through both runtimes
 | `hang.cs` | A runaway loop is stopped by the budget, and EPLAN stays responsive | result phase `run`, error mentions the budget, `unloaded` true |
 | `../../scripts/project_info.cs` | A plain read works and unloads | `ok` and `unloaded` true |
 
-Every run's `unloaded` must be true. A `false` means something kept the script alive and memory grows
-until EPLAN restarts.
+On EPLAN 2027+ (flavor `net8`) every run's `unloaded` must be true. A `false` means something kept the
+script alive and memory grows until EPLAN restarts. On EPLAN 2026 (flavor `netfx`) `unloaded` is
+`null`: .NET Framework cannot unload a script, so each distinct one stays loaded until EPLAN closes,
+and `unload_holders.cs` only reports that it does not apply.
