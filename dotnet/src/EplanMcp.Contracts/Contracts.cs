@@ -152,6 +152,15 @@ namespace EplanMcp.Contracts
         public string? EplanVersion { get; set; }
         public string? License { get; set; }
         public string? RoslynVersion { get; set; }
+
+        /// <summary>The runtime the host runs on, e.g. ".NET 8.0.11" or ".NET Framework 4.8.9290.0".</summary>
+        public string? Framework { get; set; }
+
+        /// <summary>"net8" (EPLAN 2027+) or "netfx" (EPLAN 2026): which build of the host this is.</summary>
+        public string? Flavor { get; set; }
+
+        /// <summary>False on .NET Framework: a script stays loaded until EPLAN closes.</summary>
+        public bool? Unloads { get; set; }
         public int ProcessId { get; set; }
         public string[] OpenProjects { get; set; } = new string[0];
         public string? Error { get; set; }

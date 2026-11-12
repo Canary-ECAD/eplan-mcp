@@ -4,6 +4,8 @@
          EPLAN the host uses EPLAN's own copy; this package is for compiling and for tests. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="4.12.0" />
+    <!-- .NET Framework only (EPLAN 2026): .NET 8 has it in the box. -->
+    <PackageVersion Include="System.Text.Json" Version="8.0.5" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.2" />

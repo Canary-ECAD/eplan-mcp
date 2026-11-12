@@ -2,7 +2,7 @@
   <!-- The EPLAN add-in host: actions EplanMcp_RunScript and EplanMcp_Hello. No ribbon, no dialogs.
        Its output folder is also what the script bootstrap loads from (see eplanmcp-manifest.txt). -->
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>$(EplanTargetFramework)</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>EplanMcp.Host.AddIn</RootNamespace>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -11,12 +11,14 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
     <ProjectReference Include="..\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
     <ProjectReference Include="..\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
-    <!-- Use the Roslyn EPLAN ships; never put a second copy beside the add-in. -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Common" ExcludeAssets="runtime" />
+    <!-- EPLAN 2027 ships Roslyn: use its copy, never a second one beside the add-in. EPLAN 2026
+         (.NET Framework) has none, so there the add-in carries it. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" ExcludeAssets="runtime" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" ExcludeAssets="runtime" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Eplan.EplApi.AF$(EplanApiSuffix)" HintPath="$(EplanBinPath)\Eplan.EplApi.AF$(EplanApiSuffix).dll" Private="false" />
@@ -30,6 +32,10 @@
       <_HostFile Include="$(OutDir)EplanMcp.Scripting.Core.dll" />
       <_HostFile Include="$(OutDir)EplanMcp.Scripting.dll" />
       <_HostFile Include="$(OutDir)EplanMcp.Eplan.dll" />
+      <!-- .NET Framework (EPLAN 2026): the libraries EPLAN lacks (Roslyn, System.Text.Json and
+           theirs) are loaded by the bootstrap too, so their hashes are checked like the host's. -->
+      <_HostFile Include="$(OutDir)*.dll" Exclude="@(_HostFile);$(OutDir)EplanMcp.Host.AddIn.dll"
+                 Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'" />
     </ItemGroup>
     <GetFileHash Files="@(_HostFile)" Algorithm="SHA256" HashEncoding="hex">
       <Output TaskParameter="Items" ItemName="_HostHash" />
@@ -37,5 +43,7 @@
     <WriteLinesToFile File="$(OutDir)eplanmcp-manifest.txt" Overwrite="true"
       Lines="# EplanMcp host $(Version) - SHA-256 and file, in load order;@(_HostHash->'%(FileHash) %(Filename)%(Extension)')" />
     <WriteLinesToFile File="$(OutDir)eplanmcp-version.txt" Overwrite="true" Lines="$(Version)" />
+    <!-- net8 or netfx: the server uses a local build only for an EPLAN of the same framework. -->
+    <WriteLinesToFile File="$(OutDir)eplanmcp-flavor.txt" Overwrite="true" Lines="$(EplanHostFlavor)" />
   </Target>
 </Project>

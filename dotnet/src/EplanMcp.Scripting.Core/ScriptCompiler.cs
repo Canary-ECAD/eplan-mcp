@@ -29,11 +29,20 @@ namespace EplanMcp.Scripting.Core
     {
         private const int MaxWarnings = 20;
 
+        /// <summary>The symbols MSBuild would define for the framework the script runs on, so one
+        /// script can serve EPLAN 2027 (.NET 8) and EPLAN 2026 (.NET Framework) with #if.</summary>
+        public static readonly string[] PreprocessorSymbols =
+#if NETFRAMEWORK
+            { "NETFRAMEWORK", "NET481" };
+#else
+            { "NET", "NET8_0", "NET8_0_OR_GREATER" };
+#endif
+
         public static CompileOutput Compile(string composedSource, string sourceName,
             IEnumerable<(string path, string text)> helpers, ReferenceSet refs, string assemblyName)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var parse = new CSharpParseOptions(LanguageVersion.Latest);
+            var parse = new CSharpParseOptions(LanguageVersion.Latest, preprocessorSymbols: PreprocessorSymbols);
             var trees = new List<SyntaxTree>
             {
                 CSharpSyntaxTree.ParseText(SourceText.From(composedSource, Encoding.UTF8), parse, sourceName),

@@ -4,12 +4,12 @@
        extension packs: exit code 0 = every script compiles and passes the safety check. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>$(EplanTargetFramework)</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>EplanMcp.ScriptCheck</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
     <ProjectReference Include="..\..\src\EplanMcp.Scripting\EplanMcp.Scripting.csproj" />
     <ProjectReference Include="..\..\src\EplanMcp.Eplan\EplanMcp.Eplan.csproj" />
   </ItemGroup>

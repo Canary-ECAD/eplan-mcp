@@ -168,7 +168,7 @@ namespace EplanMcp.Scripting
         /// picked up again. True when it was renamed.</summary>
         private static bool MoveAside(string queueFile)
         {
-            try { File.Move(queueFile, queueFile + ".bad", overwrite: true); return true; }
+            try { Compat.MoveOver(queueFile, queueFile + ".bad"); return true; }
             catch { return false; }
         }
 
@@ -178,8 +178,10 @@ namespace EplanMcp.Scripting
             {
                 var status = System.Text.Json.JsonSerializer.SerializeToNode(new HelloResult
                 {
-                    CoreVersion = RunPipeline.CoreVersion, Runtime = Runtime, ProcessId = Environment.ProcessId,
+                    CoreVersion = RunPipeline.CoreVersion, Runtime = Runtime, ProcessId = Compat.ProcessId,
                     EplanVersion = version, License = license,
+                    RoslynVersion = typeof(Microsoft.CodeAnalysis.CSharp.CSharpCompilation).Assembly.GetName().Version?.ToString(),
+                    Framework = Compat.FrameworkDescription, Flavor = ScriptRunner.Flavor, Unloads = ScriptRunner.CanUnload,
                 }, Json.Options) as JsonObject ?? new JsonObject();
                 status["busy_run_id"] = _busyRunId;
                 status["updated_at"] = DateTime.UtcNow.ToString("o");
@@ -195,7 +197,7 @@ namespace EplanMcp.Scripting
                 var dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllText(path + ".tmp", text, new UTF8Encoding(false));
-                File.Move(path + ".tmp", path, overwrite: true);
+                Compat.MoveOver(path + ".tmp", path);
             }
             catch { }
         }
@@ -215,7 +217,7 @@ namespace EplanMcp.Scripting
         {
             get
             {
-                var own = Path.GetDirectoryName(typeof(OfflineEnvironment).Assembly.Location);
+                var own = Compat.DirectoryOf(typeof(OfflineEnvironment).Assembly);
                 return string.IsNullOrEmpty(own) ? Array.Empty<string>() : new[] { own! };
             }
         }

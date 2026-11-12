@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+#if !NETFRAMEWORK
 using System.Runtime.Loader;
+#endif
 using System.Text;
 using EplanMcp.Contracts;
 using EplanMcp.Scripting.Core;
@@ -60,8 +62,11 @@ namespace EplanMcp.Scripting
             {
                 CoreVersion = RunPipeline.CoreVersion,
                 Runtime = runtime,
-                ProcessId = Environment.ProcessId,
+                ProcessId = Compat.ProcessId,
                 RoslynVersion = typeof(Microsoft.CodeAnalysis.CSharp.CSharpCompilation).Assembly.GetName().Version?.ToString(),
+                Framework = Compat.FrameworkDescription,
+                Flavor = ScriptRunner.Flavor,
+                Unloads = ScriptRunner.CanUnload,
             };
             try
             {
@@ -89,7 +94,7 @@ namespace EplanMcp.Scripting
             foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             {
                 if (a.IsDynamic || !EplanApiAssemblies.IsModule(a.GetName().Name, "Base")) continue;
-                try { bin = Path.GetDirectoryName(a.Location); } catch (NotSupportedException) { }
+                bin = Compat.DirectoryOf(a);
                 if (!string.IsNullOrEmpty(bin)) break;
             }
             if (string.IsNullOrEmpty(bin) || !Directory.Exists(bin)) return;
@@ -104,13 +109,16 @@ namespace EplanMcp.Scripting
         /// place before anything EPLAN-bound is JIT-compiled.</summary>
         public static void RunFromBootstrap(string requestPath, string resultPath, string hostDir)
         {
-            InstallResolver();
+            InstallResolver(hostDir);
             RunCore(requestPath, resultPath, hostDir);
         }
 
-        public static void HelloFromBootstrap(string resultPath)
+        public static void HelloFromBootstrap(string resultPath) => HelloFromBootstrap(resultPath, null);
+
+        /// <summary>With the host folder, which .NET Framework needs to find Roslyn.</summary>
+        public static void HelloFromBootstrap(string resultPath, string? hostDir)
         {
-            InstallResolver();
+            InstallResolver(hostDir);
             HelloCore(resultPath);
         }
 
@@ -120,12 +128,20 @@ namespace EplanMcp.Scripting
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void HelloCore(string resultPath) => Hello(resultPath, "bootstrap");
 
+#if !NETFRAMEWORK
         private static bool _resolverInstalled;
+#endif
 
         /// <summary>Our context was created by the bootstrap from bytes; anything it does not hold
-        /// (the EPLAN API, Roslyn) resolves to the copy EPLAN has already loaded.</summary>
-        private static void InstallResolver()
+        /// (the EPLAN API, Roslyn) resolves to the copy EPLAN has already loaded. On .NET Framework
+        /// there are no contexts: the bootstrap's own resolver serves the host assemblies, and this
+        /// one adds the host folder, where Roslyn and System.Text.Json sit (EPLAN 2026 has neither).</summary>
+        private static void InstallResolver(string? hostDir)
         {
+#if NETFRAMEWORK
+            HostAssemblyResolver.AddFolder(hostDir);
+            HostAssemblyResolver.Install();
+#else
             if (_resolverInstalled) return;
             _resolverInstalled = true;
             var own = AssemblyLoadContext.GetLoadContext(typeof(HostEntry).Assembly);
@@ -135,6 +151,7 @@ namespace EplanMcp.Scripting
                     string.Equals(a.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase)
                     && AssemblyLoadContext.GetLoadContext(a) != ctx
                     && !(AssemblyLoadContext.GetLoadContext(a)?.IsCollectible ?? false));
+#endif
         }
 
         /// <summary>The server polls for the result file, so it must never see half a file.</summary>
@@ -144,7 +161,7 @@ namespace EplanMcp.Scripting
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, text, new UTF8Encoding(false));
-            File.Move(tmp, path, overwrite: true);
+            Compat.MoveOver(tmp, path);
         }
     }
 }

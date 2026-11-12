@@ -11,7 +11,7 @@
 
     <!-- Semver of the script host core. Bump with every change to the request/result contract or
          ScriptContext; the Python server reads it back through EplanMcp_Hello. -->
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
 
     <EplanVersion Condition="'$(EplanVersion)' == ''">2027.0.3</EplanVersion>
     <EplanBinPath Condition="'$(EplanBinPath)' == ''">$(ProgramW6432)\EPLAN\Platform\$(EplanVersion)\Bin</EplanBinPath>
@@ -23,5 +23,14 @@
     <EplanApiSuffix Condition="'$(EplanApiSuffix)' == '' and Exists('$(EplanBinPath)\Eplan.EplApi.BaseNetu.dll')">Netu</EplanApiSuffix>
     <EplanApiSuffix Condition="'$(EplanApiSuffix)' == '' and Exists('$(EplanBinPath)\Eplan.EplApi.Baseu.dll')">u</EplanApiSuffix>
     <EplanApiSuffix Condition="'$(EplanApiSuffix)' == ''">Netu</EplanApiSuffix>
+
+    <!-- The framework EPLAN itself runs on, which every EPLAN-bound project targets: .NET 8 for
+         the *Netu scheme (2027+), .NET Framework 4.8.1 for *u (2026). Force it with
+         -p:EplanTargetFramework=... A host built for one cannot load in the other. -->
+    <EplanTargetFramework Condition="'$(EplanTargetFramework)' == '' and '$(EplanApiSuffix)' == 'u'">net481</EplanTargetFramework>
+    <EplanTargetFramework Condition="'$(EplanTargetFramework)' == ''">net8.0-windows</EplanTargetFramework>
+    <!-- The flavor names the release assets and the install folder ("net8" or "netfx"). -->
+    <EplanHostFlavor Condition="'$(EplanTargetFramework)' == 'net481'">netfx</EplanHostFlavor>
+    <EplanHostFlavor Condition="'$(EplanHostFlavor)' == ''">net8</EplanHostFlavor>
   </PropertyGroup>
 </Project>

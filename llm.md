@@ -448,9 +448,15 @@ All of these exist as `eplan_*` tools:
     `Budget.Check()` (call it in every long loop: it is the only way a run can
     stop), `Progress()`, `Log()`, `Lock(obj)`, `DryRun`, `WriteAllowed`.
     Return plain data. The run already holds a `LockingStep`.
+  - Works on EPLAN 2026 (host flavor `netfx`, .NET Framework) and 2027+
+    (`net8`); the server picks the target EPLAN's. On 2026 a script cannot be
+    unloaded: it stays loaded until EPLAN closes (`unloaded` is null), and the
+    same script run again reuses it, so prefer saved library scripts with
+    arguments over many one-off variants. `#if NETFRAMEWORK` works in scripts.
+    EPLAN 2025 and older are refused.
   - Call `eplan_script_hello` once first: it reports the host version, which
-    runtime answers (`addin`, else `bootstrap`), the EPLAN version and the
-    license. Every runtime (add-in, bootstrap, offline) needs the EPLAN API
+    runtime answers (`addin`, else `bootstrap`), the framework and flavor, the
+    EPLAN version and the license. Every runtime (add-in, bootstrap, offline) needs the EPLAN API
     developer license. `runtime="offline"` works on a closed `.elk` path with no
     EPLAN window, for scripts with `@needs offline` or `@needs either`.
   - **Writes:** declare `// @writes true`. Ad-hoc scripts may write only when
@@ -473,9 +479,9 @@ All of these exist as `eplan_*` tools:
     `dotnet/scripts/_template.cs` is the starting point for a new one.
   - `eplan_script_offline_stop` stops the offline host (`runtime="offline"`;
     it otherwise exits after 30 idle minutes).
-  - No local `dotnet/` build? The host installs itself on first use from the
-    GitHub release matching the server's version, checked against its
-    SHA-256 sums; `eplan_script_host_install` does it explicitly and returns
+  - No local `dotnet/` build (or one of the other flavor)? The host installs
+    itself on first use from the GitHub release matching the server's version
+    and the target EPLAN's flavor, checked against its SHA-256 sums; `eplan_script_host_install` does it explicitly and returns
     the `install_file` to register the add-in with `eplan_register_addon`.
     `eplan_script_hello` warns when the host's version differs.
 - `eplan_execute_raw_action("ActionName /PARAM:value ...")` — run any EPLAN

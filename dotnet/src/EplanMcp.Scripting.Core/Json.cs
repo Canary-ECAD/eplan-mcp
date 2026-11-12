@@ -61,8 +61,8 @@ namespace EplanMcp.Scripting.Core
                 case DateTimeOffset dto: return JsonValue.Create(dto.ToString("o"));
                 case Guid g: return JsonValue.Create(g.ToString());
                 case TimeSpan ts: return JsonValue.Create(ts.ToString());
-                case double d: return double.IsFinite(d) ? JsonValue.Create(d) : JsonValue.Create(d.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                case float f: return float.IsFinite(f) ? JsonValue.Create(f) : JsonValue.Create(f.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                case double d: return Compat.IsFinite(d) ? JsonValue.Create(d) : JsonValue.Create(d.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                case float f: return Compat.IsFinite(f) ? JsonValue.Create(f) : JsonValue.Create(f.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 case decimal m: return JsonValue.Create(m);
                 case int i: return JsonValue.Create(i);
                 case long l: return JsonValue.Create(l);

@@ -3,8 +3,18 @@ Script host - run typed C# scripts inside EPLAN.
 
 A script is ordinary C# against the EPLAN API (`using Eplan.EplApi.DataModel;` works), either a
 full class with `public static object Run(ScriptContext ctx)` or just a statement body. The host
-(dotnet/ in this repo) compiles it with EPLAN's own Roslyn, checks it, runs it in a collectible
-load context and unloads it, so a new script needs no build and no EPLAN restart.
+(dotnet/ in this repo) compiles it with Roslyn, checks it and runs it, so a new script needs no
+build and no EPLAN restart.
+
+The host comes in two flavors, one per framework EPLAN runs on:
+
+    net8   EPLAN 2027+ (.NET 8): EPLAN's own Roslyn; each script runs in a collectible load
+           context and is unloaded afterwards
+    netfx  EPLAN 2026 (.NET Framework 4.8.1): the host brings Roslyn; a script cannot be
+           unloaded there, so each distinct script stays loaded until EPLAN closes (running the
+           same one again reuses it)
+
+The flavor follows the target EPLAN (eplan_connect's target_version, else the newest install).
 
 Two runtimes run the SAME scripts:
 
@@ -50,7 +60,10 @@ PROTOCOL = 1
 
 # The host version this server is written against (<Version> in dotnet/Directory.Build.props).
 # A host reporting another version still runs; script_hello adds a warning.
-HOST_VERSION = "0.2.1"
+HOST_VERSION = "0.3.0"
+
+# Host flavors, by the framework of the EPLAN they load in (see the module docstring).
+FLAVORS = ("net8", "netfx")
 
 # Out-of-band human switch for real-project writes: set for the server process by a person (MCP
 # config or shell), never by a tool call. Read at call time.
@@ -61,8 +74,8 @@ _REPO_ROOT = os.path.abspath(os.path.join(_HERE, "..", "..", "..", ".."))
 DOTNET_DIR = os.path.join(_REPO_ROOT, "dotnet")
 
 # A git clone has no build output: the host then comes from the GitHub release host-v<version>,
-# installed per version under ~/.eplan-mcp/host/<version>/ (see ensure_host). Not under AppData:
-# see RUNS_DIR below.
+# installed per version and flavor under ~/.eplan-mcp/host/<version>/<flavor>/ (see ensure_host).
+# Not under AppData: see RUNS_DIR below.
 REPO_URL = "https://github.com/Canary-ECAD/eplan-mcp"
 # Host releases have their own tag line, so they never collide with the server's vX.Y.Z tags (which
 # trigger .github/workflows/release.yml) and the two version numbers can move independently.
@@ -71,21 +84,60 @@ INSTALL_ROOT = os.path.join(os.path.expanduser("~"), ".eplan-mcp", "host")
 _OFFLINE_EXE = "EplanMcp.Host.Offline.exe"
 
 
-def _installed_dirs(version: str = HOST_VERSION):
+def _target_install():
+    """The EPLAN install the host will run in: eplan_connect's target version, else the newest.
+    None when nothing can be detected (the check never blocks a run)."""
+    try:
+        from eplan_connection import get_manager, detect_installed_versions
+        installs = detect_installed_versions()
+        wanted = getattr(get_manager(), "target_version", None)
+    except Exception:  # noqa: BLE001 - never block a run on the check itself
+        return None
+    chosen = next((i for i in installs if i["version"] == wanted), None) if wanted else None
+    return chosen or (installs[0] if installs else None)
+
+
+def _flavor() -> str:
+    """The host flavor the target EPLAN loads: netfx for a .NET Framework EPLAN, else net8."""
+    chosen = _target_install()
+    return "netfx" if chosen and chosen.get("runtime") == "netfx" else "net8"
+
+
+def _installed_dirs(version: str = HOST_VERSION, flavor: str = None):
     """(host dir, offline dir) of an installed release: the add-on zip keeps its
     EplanMcp/<version>/BIN + CFG layout under addon/, the offline zip is flat under offline/."""
-    root = os.path.join(INSTALL_ROOT, version)
+    root = os.path.join(INSTALL_ROOT, version, flavor or _flavor())
     return (os.path.join(root, "addon", "EplanMcp", version, "BIN"), os.path.join(root, "offline"))
 
 
-def _default_dir(env: str, built: str, installed: str) -> str:
-    return os.environ.get(env) or (built if os.path.isdir(built) else installed)
+def _built_flavor(folder: str) -> str:
+    """The flavor a local build wrote (eplanmcp-flavor.txt). Builds before host 0.3.0 wrote none
+    and were all net8."""
+    try:
+        with open(os.path.join(folder, "eplanmcp-flavor.txt"), encoding="utf-8-sig") as f:
+            return f.read().strip() or "net8"
+    except OSError:
+        return "net8"
 
 
-# Where the host lives (EplanMcp.Host.AddIn output: DLLs + eplanmcp-manifest.txt): the override,
-# else this checkout's build, else the installed release.
-HOST_DIR = _default_dir("EPLAN_MCP_HOST_DIR", os.path.join(DOTNET_DIR, "artifacts", "host"),
-                        _installed_dirs()[0])
+def _pick_dir(built: str, installed: str) -> str:
+    """This checkout's build when it was made for the target EPLAN's framework, else the release."""
+    return built if os.path.isdir(built) and _built_flavor(built) == _flavor() else installed
+
+
+def _host_dir() -> str:
+    """Where the host lives (EplanMcp.Host.AddIn output: DLLs + eplanmcp-manifest.txt): the
+    override, else this checkout's build of the right flavor, else the installed release."""
+    return HOST_DIR or _pick_dir(os.path.join(DOTNET_DIR, "artifacts", "host"), _installed_dirs()[0])
+
+
+def _offline_dir() -> str:
+    return OFFLINE_DIR or _pick_dir(os.path.join(DOTNET_DIR, "artifacts", "offline"), _installed_dirs()[1])
+
+
+# A person's override of the host folder, used as given whatever the target EPLAN; None picks one
+# per flavor (_host_dir).
+HOST_DIR = os.environ.get("EPLAN_MCP_HOST_DIR") or None
 
 # Per-user run folders: request, result, progress, heartbeat, cancel. Never inside a checkout.
 # NOT under %LOCALAPPDATA% / %APPDATA%: measured on EPLAN 2027.0.3, an ExecuteScript file path
@@ -268,7 +320,7 @@ def _read_json(path: str):
 
 def _host_version():
     try:
-        with open(os.path.join(HOST_DIR, "eplanmcp-version.txt"), encoding="utf-8-sig") as f:
+        with open(os.path.join(_host_dir(), "eplanmcp-version.txt"), encoding="utf-8-sig") as f:
             return f.read().strip()
     except OSError:
         return None
@@ -276,8 +328,9 @@ def _host_version():
 
 # --- Host install from a GitHub release -------------------------------------------------------
 # Assets built by dotnet/pack/pack-release.ps1 and uploaded to the release host-v<version>.
-_RELEASE_ASSETS = (("EplanMcp-{v}-addon.zip", "addon"), ("EplanMcp-{v}-offline.zip", "offline"))
-_RELEASE_SUMS = "SHA256SUMS.txt"
+# One set per flavor, each built on a machine with that EPLAN, with its own checksum file.
+_RELEASE_ASSETS = (("EplanMcp-{v}-{f}-addon.zip", "addon"), ("EplanMcp-{v}-{f}-offline.zip", "offline"))
+_RELEASE_SUMS = "SHA256SUMS-{f}.txt"
 _VERSION_RE = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?")
 _install_lock = threading.Lock()
 
@@ -313,66 +366,72 @@ def _safe_extract(zip_path: str, dest: str) -> None:
         zf.extractall(root)
 
 
-def _is_installed(version: str) -> bool:
-    host, offline = _installed_dirs(version)
+def _is_installed(version: str, flavor: str) -> bool:
+    host, offline = _installed_dirs(version, flavor)
     return (os.path.isfile(os.path.join(host, "eplanmcp-version.txt"))
             and os.path.isfile(os.path.join(offline, _OFFLINE_EXE)))
 
 
-def ensure_host(version: str = HOST_VERSION) -> dict:
-    """Install the release host v<version> under INSTALL_ROOT/<version>, unless it is there.
+def ensure_host(version: str = HOST_VERSION, flavor: str = None) -> dict:
+    """Install the release host v<version> of `flavor` (default: the target EPLAN's) under
+    INSTALL_ROOT/<version>/<flavor>, unless it is there.
 
     Downloads the assets and SHA256SUMS.txt, refuses on a missing or wrong checksum or an unsafe
     zip entry, extracts into a temp folder next to the target and renames it into place, so a
     failed or interrupted install leaves nothing behind. Raises OSError or ValueError."""
     if not _VERSION_RE.fullmatch(version or ""):
         raise ValueError(f"Bad host version {version!r}; expected e.g. {HOST_VERSION}.")
-    host, offline = _installed_dirs(version)
-    target = os.path.join(INSTALL_ROOT, version)
-    info = {"version": version, "path": target, "host_dir": host, "offline_dir": offline,
+    flavor = flavor or _flavor()
+    if flavor not in FLAVORS:
+        raise ValueError(f"Bad host flavor {flavor!r}; expected one of {', '.join(FLAVORS)}.")
+    host, offline = _installed_dirs(version, flavor)
+    target = os.path.join(INSTALL_ROOT, version, flavor)
+    sums_name = _RELEASE_SUMS.format(f=flavor)
+    info = {"version": version, "flavor": flavor, "path": target, "host_dir": host, "offline_dir": offline,
             # for eplan_register_addon(install_file=...)
             "install_file": os.path.join(os.path.dirname(host), "CFG", "install.xml")}
     with _install_lock:
-        if _is_installed(version):
+        if _is_installed(version, flavor):
             return dict(info, installed=False, note="Already installed.")
         if os.path.exists(target):
             raise FileExistsError(f"{target} exists but holds no complete host; delete it and retry.")
-        os.makedirs(INSTALL_ROOT, exist_ok=True)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
         tmp = tempfile.mkdtemp(prefix=".download-", dir=INSTALL_ROOT)   # same volume: atomic rename
         try:
-            sums_path = os.path.join(tmp, _RELEASE_SUMS)
+            sums_path = os.path.join(tmp, sums_name)
             try:
-                _download(_release_url(version, _RELEASE_SUMS), sums_path)
+                _download(_release_url(version, sums_name), sums_path)
             except urllib.error.HTTPError as e:
                 if e.code != 404:
                     raise
                 raise FileNotFoundError(
-                    f"No script host release {HOST_TAG_PREFIX}{version} is published at "
-                    f"{(os.environ.get('EPLAN_MCP_RELEASE_URL') or REPO_URL).rstrip('/')}/releases. "
-                    "Build dotnet/ on a machine with EPLAN 2027 (dotnet/pack/pack-release.ps1 builds "
-                    "and prints the publish command), or set EPLAN_MCP_HOST_DIR to a built host.") from e
+                    f"No {flavor} script host is published in release {HOST_TAG_PREFIX}{version} at "
+                    f"{(os.environ.get('EPLAN_MCP_RELEASE_URL') or REPO_URL).rstrip('/')}/releases "
+                    f"({sums_name} is missing). Build dotnet/ on a machine with "
+                    f"{'EPLAN 2026' if flavor == 'netfx' else 'EPLAN 2027'} (dotnet/pack/pack-release.ps1 "
+                    "builds and prints the upload command), or set EPLAN_MCP_HOST_DIR to a built host.") from e
             sums = {}
             with open(sums_path, encoding="utf-8-sig") as f:
                 for line in f.read().splitlines():
                     parts = line.split(None, 1)
                     if len(parts) == 2:
                         sums[parts[1].strip().lstrip("*")] = parts[0].lower()
-            stage = os.path.join(tmp, version)
+            stage = os.path.join(tmp, flavor)
             for pattern, sub in _RELEASE_ASSETS:
-                name = pattern.format(v=version)
+                name = pattern.format(v=version, f=flavor)
                 expected = sums.get(name)
                 if not expected:
-                    raise ValueError(f"Refusing to install: {_RELEASE_SUMS} has no checksum for {name}.")
+                    raise ValueError(f"Refusing to install: {sums_name} has no checksum for {name}.")
                 zip_path = os.path.join(tmp, name)
                 actual = _download(_release_url(version, name), zip_path)
                 if actual != expected:
                     raise ValueError(f"Refusing to install: SHA-256 of {name} is {actual}, "
-                                     f"{_RELEASE_SUMS} says {expected}.")
+                                     f"{sums_name} says {expected}.")
                 _safe_extract(zip_path, os.path.join(stage, sub))
             os.rename(stage, target)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
-        if not _is_installed(version):
+        if not _is_installed(version, flavor):
             raise FileNotFoundError(f"The release {HOST_TAG_PREFIX}{version} installed to {target} but holds no "
                                     "complete host (eplanmcp-version.txt, " + _OFFLINE_EXE + ").")
     return dict(info, installed=True)
@@ -381,45 +440,48 @@ def ensure_host(version: str = HOST_VERSION) -> dict:
 def _auto_install(path: str) -> None:
     """Install the release when `path` is a default installed-release folder (no override, no
     local build). Any failure becomes a FileNotFoundError with the reason."""
-    if os.path.normcase(os.path.abspath(path)) not in {os.path.normcase(d) for d in _installed_dirs()}:
+    flavor = _flavor()
+    if os.path.normcase(os.path.abspath(path)) not in {os.path.normcase(d) for d in _installed_dirs(HOST_VERSION, flavor)}:
         return
     try:
-        ensure_host()
+        ensure_host(HOST_VERSION, flavor)
     except (OSError, ValueError, zipfile.BadZipFile, http.client.HTTPException) as e:
         raise FileNotFoundError(f"Script host not built here and the release {HOST_TAG_PREFIX}{HOST_VERSION} "
                                 f"could not be installed: {e}") from e
 
 
-def script_host_install(version: str = None) -> dict:
+def script_host_install(version: str = None, flavor: str = None) -> dict:
     """
     Download and install the script host release (add-in, bootstrap and offline host) from the
-    project's GitHub release host-v<version> into ~/.eplan-mcp/host/<version>/. Checks every file's
-    SHA-256 against the release's SHA256SUMS.txt and refuses on a mismatch. A no-op when that
-    version is already installed. Needed only for a git clone without a local dotnet build;
-    script tools also run it on first use. To use the add-in runtime, register the returned
-    install_file with eplan_register_addon and restart EPLAN.
+    project's GitHub release host-v<version> into ~/.eplan-mcp/host/<version>/<flavor>/. Checks
+    every file's SHA-256 against the release's SHA256SUMS-<flavor>.txt and refuses on a mismatch.
+    A no-op when that version is already installed. Needed only for a git clone without a local
+    dotnet build; script tools also run it on first use. To use the add-in runtime, register the
+    returned install_file with eplan_register_addon and restart EPLAN.
 
     Args:
         version: Host version to install; default the version this server expects.
+        flavor: "net8" (EPLAN 2027+) or "netfx" (EPLAN 2026); default the target EPLAN's.
     """
     try:
-        return dict(ensure_host(version or HOST_VERSION), success=True)
+        return dict(ensure_host(version or HOST_VERSION, flavor), success=True)
     except (OSError, ValueError, zipfile.BadZipFile, http.client.HTTPException) as e:
         return {"success": False, "error": str(e)}
 
 
 def _bootstrap_script(run_folder: str, mode: str, request_path: str, result_path: str) -> str:
     """Fill the bootstrap template and write it into the run folder."""
-    template = os.path.join(HOST_DIR, "Bootstrap", "bootstrap.cs.template")
+    host_dir = _host_dir()
+    template = os.path.join(host_dir, "Bootstrap", "bootstrap.cs.template")
     if not os.path.isfile(template):
-        _auto_install(HOST_DIR)
+        _auto_install(host_dir)
     if not os.path.isfile(template):
         raise FileNotFoundError(
             f"Script host not built: {template} is missing. Run eplan_script_host_install, build "
             "dotnet/EplanMcp.sln (Release) or set EPLAN_MCP_HOST_DIR.")
     text = _read(template)
     # Verbatim C# strings (@"..."): only a double quote needs escaping.
-    for key, value in (("HOST_DIR", HOST_DIR), ("REQUEST_PATH", request_path),
+    for key, value in (("HOST_DIR", host_dir), ("REQUEST_PATH", request_path),
                        ("RESULT_PATH", result_path), ("MODE", mode),
                        ("CORE_VERSION", _host_version() or "0.0.0")):
         text = text.replace("{{" + key + "}}", value.replace('"', '""'))
@@ -432,8 +494,7 @@ def _bootstrap_script(run_folder: str, mode: str, request_path: str, result_path
 
 # The offline host (dotnet/src/EplanMcp.Host.Offline): EPLAN's offline API in its own long-lived
 # process, fed through a queue folder. No interactive EPLAN connection is needed for it.
-OFFLINE_DIR = _default_dir("EPLAN_MCP_OFFLINE_DIR", os.path.join(DOTNET_DIR, "artifacts", "offline"),
-                           _installed_dirs()[1])
+OFFLINE_DIR = os.environ.get("EPLAN_MCP_OFFLINE_DIR") or None   # override; None: per flavor
 OFFLINE_QUEUE = os.environ.get("EPLAN_MCP_OFFLINE_QUEUE") or os.path.join(
     os.path.expanduser("~"), ".eplan-mcp", "offline-queue")
 _OFFLINE_STATUS_FRESH_S = 15
@@ -535,9 +596,10 @@ def _offline_ensure(start_timeout: float = 180.0) -> dict:
         if _offline_last_pid and _pid_alive(_offline_last_pid):
             raise TimeoutError("The previous offline host (pid %s) is still shutting down; try again "
                                "when it has exited." % _offline_last_pid)
-        exe = os.path.join(OFFLINE_DIR, _OFFLINE_EXE)
+        offline_dir = _offline_dir()
+        exe = os.path.join(offline_dir, _OFFLINE_EXE)
         if not os.path.isfile(exe):
-            _auto_install(OFFLINE_DIR)
+            _auto_install(offline_dir)
         if not os.path.isfile(exe):
             raise FileNotFoundError(f"Offline host not built: {exe}. Run eplan_script_host_install or "
                                     "build dotnet/src/EplanMcp.Host.Offline (Release).")
@@ -549,7 +611,7 @@ def _offline_ensure(start_timeout: float = 180.0) -> dict:
                 pass
         import subprocess
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        subprocess.Popen([exe, "--queue", OFFLINE_QUEUE], cwd=OFFLINE_DIR, creationflags=flags,
+        subprocess.Popen([exe, "--queue", OFFLINE_QUEUE], cwd=offline_dir, creationflags=flags,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.time() + start_timeout
         while time.time() < deadline:
@@ -661,29 +723,26 @@ def _version_warning(data: dict) -> dict:
 
 
 def _unsupported_eplan() -> dict:
-    """An error dict when the target EPLAN cannot load the host, else None.
+    """An error dict when the target EPLAN can load neither host flavor, else None.
 
-    The host is .NET 8 (Roslyn + collectible AssemblyLoadContext). EPLAN 2026 and older run on
-    .NET Framework 4.8, which cannot load a .NET 8 assembly, and the offline host cannot load
-    their mixed-mode API either. Without this check a run there only reports "no answer from
-    the host", which reads like a registration problem.
+    net8 is built against EPLAN 2027 and netfx against EPLAN 2026. EPLAN 2025 and older run on
+    .NET Framework too, but their API differs from 2026's and is not tested: refused up front, with
+    a reason, instead of a run that fails in some later bind.
     """
-    try:
-        from eplan_connection import get_manager, detect_installed_versions
-        installs = detect_installed_versions()
-        wanted = getattr(get_manager(), "target_version", None)
-    except Exception:  # noqa: BLE001 - never block a run on the check itself
-        return None
-    chosen = next((i for i in installs if i["version"] == wanted), None) if wanted else None
-    chosen = chosen or (installs[0] if installs else None)
+    chosen = _target_install()
     if not chosen or chosen.get("runtime") != "netfx":
+        return None
+    try:
+        major = int(str(chosen["version"]).split(".")[0])
+    except (KeyError, ValueError):
+        return None
+    if major >= 2026:
         return None
     return {"success": False,
             "eplan_version": chosen.get("full_version") or chosen["version"],
             "eplan_runtime": "netfx",
-            "error": (f"The script host needs EPLAN 2027 or newer (.NET 8). EPLAN "
-                      f"{chosen.get('full_version') or chosen['version']} runs on .NET Framework "
-                      "and cannot load it."),
+            "error": (f"The script host supports EPLAN 2026 (.NET Framework) and 2027 or newer "
+                      f"(.NET 8). EPLAN {chosen.get('full_version') or chosen['version']} is older."),
             "next_step": ("On this EPLAN use eplan_execute_custom_script (EPLAN's own script "
                           "engine, C# 5) or the eplan_live_* tools instead.")}
 

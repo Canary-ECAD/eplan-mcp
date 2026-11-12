@@ -202,7 +202,10 @@ namespace EplanMcp.Scripting.Core
                 ran = true;
 
                 var verify = session.Verify();
-                res.Unloaded = Guard(res, "checking the script unloaded", () => ScriptRunner.WaitForUnload(run.Context));
+                if (ScriptRunner.CanUnload)
+                    res.Unloaded = Guard(res, "checking the script unloaded", () => ScriptRunner.WaitForUnload(run.Context) ?? true);
+                else
+                    res.Log.Add("This EPLAN runs on .NET Framework, which cannot unload a script: it stays loaded until EPLAN closes (the same script run again reuses it).");
                 if (res.Unloaded == false)
                     res.Warnings.Add("The script's code was still loaded after the run. Usually harmless (one small assembly, measured with no visible memory growth); if it keeps happening the script may leave an event handler, timer or static reference behind.");
 

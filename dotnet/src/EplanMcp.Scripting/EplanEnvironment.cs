@@ -18,7 +18,7 @@ namespace EplanMcp.Scripting
         {
             RuntimeName = runtimeName;
             _searchDirs = (searchDirs ?? Array.Empty<string>()).ToList();
-            var own = Path.GetDirectoryName(typeof(EplanEnvironment).Assembly.Location);
+            var own = Compat.DirectoryOf(typeof(EplanEnvironment).Assembly);
             if (!string.IsNullOrEmpty(own)) _searchDirs.Add(own!);
         }
 

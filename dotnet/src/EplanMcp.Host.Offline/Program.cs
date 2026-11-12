@@ -31,11 +31,11 @@ namespace EplanMcp.Host.Offline
                 return 2;
             }
 
-            var queueDir = Path.GetFullPath(queue);   // before the current directory moves to Bin
+            var queueDir = Path.GetFullPath(queue!);   // before the current directory moves to Bin
             // EPLAN wants the PRODUCT VARIANT's Bin (where the variant's launcher lives) as well as the
             // Platform Bin that holds the API: <EPLAN>\Platform\<v>\Bin -> <EPLAN>\Electric P8\<v>\Bin.
             string variantBin = Arg(args, "--variant-bin")
-                ?? bin.Replace(Path.DirectorySeparatorChar + "Platform" + Path.DirectorySeparatorChar,
+                ?? bin!.Replace(Path.DirectorySeparatorChar + "Platform" + Path.DirectorySeparatorChar,
                                Path.DirectorySeparatorChar + "Electric P8" + Path.DirectorySeparatorChar);
             if (!Directory.Exists(variantBin))
             {
@@ -54,7 +54,7 @@ namespace EplanMcp.Host.Offline
             // EPLAN's API assemblies have unmanaged dependencies that load from the current
             // directory, and must load from exactly this Bin: pin BEFORE touching anything EPLAN-bound.
             Environment.CurrentDirectory = bin;
-            Pin(bin, variantBin);
+            Pin(bin!, variantBin);
             return Serve(variantBin, queueDir, TimeSpan.FromMinutes(idle));
         }
 

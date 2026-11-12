@@ -61,7 +61,7 @@ namespace EplanMcp.Scripting.Core
         internal static string CacheKey(IEnumerable<string> searchDirs, IEnumerable<string> extra)
         {
             int count = AppDomain.CurrentDomain.GetAssemblies().Count(a =>
-                !a.IsDynamic && !(System.Runtime.Loader.AssemblyLoadContext.GetLoadContext(a)?.IsCollectible ?? false));
+                !a.IsDynamic && !ScriptRunner.IsCollectible(a));
             return count + "|" + string.Join(";", searchDirs) + "|" + string.Join(";", extra.Select(Stamp));
         }
 
@@ -98,10 +98,7 @@ namespace EplanMcp.Scripting.Core
                     AddIfManaged(paths, p);
 
             // 3. The runtime directory (covers framework facades nothing has loaded yet).
-            var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
-            if (!string.IsNullOrEmpty(runtimeDir))
-                foreach (var p in Directory.EnumerateFiles(runtimeDir!, "*.dll"))
-                    AddIfManaged(paths, p);
+            AddRuntimeDirectory(paths);
 
             foreach (var p in extra)
                 if (File.Exists(p)) paths[Path.GetFileNameWithoutExtension(p)] = Path.GetFullPath(p);
@@ -116,10 +113,21 @@ namespace EplanMcp.Scripting.Core
         {
             var paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in files) AddIfManaged(paths, p);
-            var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
-            if (!string.IsNullOrEmpty(runtimeDir))
-                foreach (var p in Directory.EnumerateFiles(runtimeDir!, "*.dll")) AddIfManaged(paths, p);
+            AddRuntimeDirectory(paths);
             return new ReferenceSet(paths, Hashing.Sha256Hex(string.Join(";", paths.Keys.OrderBy(k => k))));
+        }
+
+        /// <summary>The runtime's own folder. On .NET Framework its facades (netstandard.dll,
+        /// System.Runtime.dll) sit in a Facades subfolder; a script needs them as soon as it touches a
+        /// type from a netstandard2.0 library (EplanMcp.Contracts, System.Text.Json).</summary>
+        private static void AddRuntimeDirectory(Dictionary<string, string> paths)
+        {
+            var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
+            if (string.IsNullOrEmpty(runtimeDir)) return;
+            foreach (var p in Directory.EnumerateFiles(runtimeDir!, "*.dll")) AddIfManaged(paths, p);
+            var facades = Path.Combine(runtimeDir!, "Facades");
+            if (Directory.Exists(facades))
+                foreach (var p in Directory.EnumerateFiles(facades, "*.dll")) AddIfManaged(paths, p);
         }
 
         private static void AddIfManaged(Dictionary<string, string> paths, string p)

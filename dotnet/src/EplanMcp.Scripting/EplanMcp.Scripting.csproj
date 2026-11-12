@@ -3,7 +3,7 @@
        entry points the add-in action and the script bootstrap call. Needs an installed EPLAN to
        build (the API assemblies are referenced in place and never copied). -->
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>$(EplanTargetFramework)</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>EplanMcp.Scripting</RootNamespace>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -11,7 +11,7 @@
   <ItemGroup>
     <!-- EPLAN's *Netu assemblies are compiled against WindowsDesktop; without it MSBuild cannot
          unify WindowsBase / System.Drawing (MSB3277). EPLAN's process loads it either way. -->
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'" />
     <ProjectReference Include="..\EplanMcp.Scripting.Core\EplanMcp.Scripting.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
