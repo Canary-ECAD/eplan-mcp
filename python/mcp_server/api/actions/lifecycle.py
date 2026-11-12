@@ -47,9 +47,12 @@ def _find_eplan_exe(version: str = None) -> tuple:
     if not installs:
         return None, {"success": False, "error": "No EPLAN installation detected."}
     if version:
-        chosen = next((i for i in installs if i["version"] == str(version)), None)
+        # Accept the major ("2026") and the full version ("2026.0.3") the server prints at start.
+        wanted = str(version).strip()
+        chosen = next((i for i in installs
+                       if wanted in (i["version"], i.get("full_version"))), None)
         if chosen is None:
-            available = ", ".join(i["version"] for i in installs)
+            available = ", ".join(i.get("full_version") or i["version"] for i in installs)
             return None, {"success": False,
                           "error": f"EPLAN {version} not installed (available: {available})."}
     else:
@@ -64,7 +67,7 @@ def _find_eplan_exe(version: str = None) -> tuple:
 
 def app_launch(version: str = None, variant: str = None, headless: bool = False,
                  wait_seconds: int = 600, extra_args: str = None,
-                 connect_after: bool = True) -> dict:
+                 connect_after: bool = True, allow_second_instance: bool = False) -> dict:
     """
     Launch EPLAN and wait until its remoting server accepts connections.
 
@@ -81,9 +84,9 @@ def app_launch(version: str = None, variant: str = None, headless: bool = False,
     this times out even though EPLAN itself started fine.
 
     Args:
-        version: EPLAN major version, e.g. "2026". Omit for the newest
-            installed. Must match the version whose DLLs this server has
-            loaded (if any) or reconnection will fail.
+        version: EPLAN version, major ("2026") or full ("2026.0.3"). Omit
+            for the newest installed. Must match the version whose DLLs this
+            server has loaded (if any) or reconnection will fail.
         variant: EPLAN variant to start, default "Electric P8".
         headless: If True, starts with /Frame:0 (no visible main window).
             Useful for CI-style runs; leave False when a human also wants to
@@ -95,6 +98,11 @@ def app_launch(version: str = None, variant: str = None, headless: bool = False,
         extra_args: Additional raw command-line arguments appended verbatim.
         connect_after: Connect this MCP server to the new instance once the
             remoting port appears (default True).
+        allow_second_instance: Launch even when an EPLAN is already running
+            (default False). Without it a running EPLAN is reported, not
+            duplicated: a second instance on the same workspace competes for
+            its projects and settings, and if remote access is off it never
+            opens a port, so the call would only wait out wait_seconds.
     """
     wait_seconds = min(wait_seconds, 900)
     found, error = _find_eplan_exe(version)
@@ -120,6 +128,20 @@ def app_launch(version: str = None, variant: str = None, headless: bool = False,
     cmdline = " ".join(args)
 
     already_running = _eplan_pids()
+    if already_running and not allow_second_instance:
+        ports = _eplan_listening_ports(only_pids=set(already_running))
+        return {
+            "success": False,
+            "eplan_was_already_running": True,
+            "running_pids": sorted(already_running),
+            "listening_ports": ports,
+            "error": "EPLAN is already running; not starting a second instance.",
+            "next_step": ("Call eplan_connect to use it" + (f" (port {ports[0]})." if len(ports) == 1 else ".")
+                          if ports else
+                          "It listens on no remoting port: enable 'Allow remote access via Remote "
+                          "Client' in EPLAN's settings and restart it, then call eplan_connect. "
+                          "Pass allow_second_instance=True only to start another instance on purpose."),
+        }
     try:
         # Detach so EPLAN outlives this MCP server process. Keep the handle -
         # its pid is how a pre-existing instance is told apart below.
@@ -349,7 +371,8 @@ def app_restart(reopen_project: bool = True, headless: bool = False,
                 "error": "Target process exit was not verified; not relaunching."}
 
     steps["launch"] = app_launch(version=version, variant=variant, headless=headless,
-                                   wait_seconds=wait_seconds, connect_after=True)
+                                   wait_seconds=wait_seconds, connect_after=True,
+                                   allow_second_instance=True)
     if not steps["launch"].get("success"):
         return {"success": False, "steps": steps,
                 "error": "Relaunch failed - see steps.launch for details."}

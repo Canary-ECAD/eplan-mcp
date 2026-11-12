@@ -95,7 +95,7 @@ def _lifecycle(monkeypatch, shutdown_ok=True):
     monkeypatch.setattr(project, "open_project", lambda p: seen.append(("open", p)) or {"success": True})
     monkeypatch.setattr(lifecycle, "app_shutdown",
                         lambda: seen.append("shutdown") or {"success": shutdown_ok})
-    monkeypatch.setattr(lifecycle, "app_launch", lambda: seen.append("launch") or {"success": True})
+    monkeypatch.setattr(lifecycle, "app_launch", lambda **kw: seen.append("launch") or {"success": True})
     monkeypatch.setattr(addons, "verify_actions",
                         lambda names: seen.append(("verify", list(names))) or {"success": True})
     monkeypatch.setattr(addin_dev, "addin_deploy",

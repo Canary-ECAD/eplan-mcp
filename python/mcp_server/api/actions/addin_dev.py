@@ -304,7 +304,7 @@ def addin_update(manifest: str, restart: bool = False, do_build: bool = True,
         steps["deploy"] = addin_deploy(m)
 
     if restart:
-        steps["launch"] = app_launch()
+        steps["launch"] = app_launch(allow_second_instance=True)
         if not steps["launch"].get("success"):
             return {"success": False, "steps": steps,
                     "error": "EPLAN relaunch failed - see steps.launch."}
