@@ -70,3 +70,6 @@ python/mcp_server/scripts/ops/
 # must never be committed. Publish findings through an issue instead.
 ISSUE_*_PLAN.md
 **/ISSUE_*_PLAN.md
+
+# graphify knowledge graph: local, rebuilt with `graphify update .`
+graphify-out/
