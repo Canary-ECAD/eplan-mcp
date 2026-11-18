@@ -119,7 +119,27 @@ def test_resources(tmp_path, monkeypatch):
 
     assert "fix_things" in read("eplan-script://library/fix_things")
     assert json.loads(read("eplan-script://runs/abc123/result"))["ok"] is True
+    (run / "progress.json").write_text('{"done": 3}', encoding="utf-8")
+    assert json.loads(read("eplan-script://runs/abc123/progress"))["done"] == 3
     assert "ctx.Budget.Check()" in read("eplan-help://scripting-guide")
+
+    listed = scripthost.script_list()
+    assert listed["guide_uri"] == "eplan-help://scripting-guide"
+    fix = next(s for s in listed["scripts"] if s["tool"] == "fix_things")
+    assert "fix_things" in read(fix["source_uri"])
+
+
+def test_server_instructions_name_real_tools():
+    """The instructions are the one thing a client keeps when every tool is deferred, so every
+    tool they name must exist."""
+    import re
+    app, registry, _ = server.build_app("full", app=FastMCP("t", instructions=server.SERVER_INSTRUCTIONS))
+    # eplan_live_* is a family, and the eplan_tools_* meta-tools exist only in discovery mode.
+    named = {n for n in re.findall(r"\beplan_[a-z_]*[a-z]\b", server.SERVER_INSTRUCTIONS)
+             if n != "eplan_tools_search"}
+    published = {t.name for t in asyncio.run(app.list_tools())}
+    assert named <= published, named - published
+    assert len(server.SERVER_INSTRUCTIONS) < 1500
 
 
 def test_run_file_reader_rejects_path_tricks(tmp_path, monkeypatch):
