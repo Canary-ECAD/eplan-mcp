@@ -175,6 +175,11 @@ def register_resources(app):
     def run_data(run_id: str) -> str:
         return scripthost.read_run_file(run_id, "result_data.json")
 
+    @app.resource("eplan-script://runs/{run_id}/progress", mime_type="application/json",
+                  description="Last progress a running script reported (ctx.Progress).")
+    def run_progress(run_id: str) -> str:
+        return scripthost.read_run_file(run_id, "progress.json")
+
     @app.resource("eplan-help://scripting-guide", mime_type="text/markdown",
                   description="How to write EPLAN scripts for the script host: ctx, headers, writes, helpers.")
     def scripting_guide() -> str:
@@ -182,4 +187,5 @@ def register_resources(app):
             return f.read()
 
     return ["eplan-script://library/{name}", "eplan-script://runs/{run_id}/result",
-            "eplan-script://runs/{run_id}/data", "eplan-help://scripting-guide"]
+            "eplan-script://runs/{run_id}/data", "eplan-script://runs/{run_id}/progress",
+            "eplan-help://scripting-guide"]

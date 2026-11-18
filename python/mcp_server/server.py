@@ -532,6 +532,23 @@ def load_extensions(env_value: str = None, app=None, registry=None, mode=None):
 # APP CONSTRUCTION
 # ============================================================================
 
+# Sent once at initialize and kept in the client's context even when every tool is deferred
+# (Claude Code's tool search), so it names the entry points a search would otherwise have to
+# guess. Keep it short: it costs tokens on every request.
+SERVER_INSTRUCTIONS = """\
+Drives a running EPLAN Electric P8. Start with eplan_status (connection, version, open project).
+- Exact names: eplan_action_catalog / eplan_action_describe for actions, eplan_api_types /
+  eplan_api_describe for Eplan.EplApi members. Look a name up before you use it.
+- C# against the API: eplan_script_run (compile_only, then dry_run, then for real);
+  eplan_script_list for the library. Read the resource eplan-help://scripting-guide first.
+- Writes go to a scratch clone (eplan_scratch_project_create), never to the user's project
+  unless they approved it. eplan_live_* tools read and edit pages, devices and connections.
+- A long run returns a run_id: follow it with eplan_script_status. Large results are resources
+  (eplan-script://runs/<run_id>/data), named in the reply.
+- A hang usually means a dialog: eplan_list_dialogs. Check-run messages: eplan_live_read_check_messages.
+In discovery mode the rest is reached through eplan_tools_search / _describe / _call."""
+
+
 def build_app(mode="full", app=None, registry=None):
     """
     Build a fully registered server for `mode`.
@@ -541,7 +558,7 @@ def build_app(mode="full", app=None, registry=None):
     second, independent instance without disturbing the live one.
     """
     mode = _resolve_mode(mode)
-    app = app if app is not None else FastMCP("EPLAN MCP Server")
+    app = app if app is not None else FastMCP("EPLAN MCP Server", instructions=SERVER_INSTRUCTIONS)
     registry = registry if registry is not None else ToolRegistry()
 
     _register_core(app, registry, mode)

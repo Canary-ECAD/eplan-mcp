@@ -926,9 +926,13 @@ def script_status(run_id: str) -> dict:
     if job["thread"] is not None and job["thread"].is_alive():
         heartbeat = os.path.join(job["folder"], "heartbeat")
         age = time.time() - os.path.getmtime(heartbeat) if os.path.exists(heartbeat) else None
+        progress_file = os.path.join(job["folder"], "progress.json")
         return {"success": True, "state": "running", "run_id": run_id, "runtime": job["runtime"],
                 "elapsed_s": round(time.time() - job["started"], 1),
-                "progress": _read_json(os.path.join(job["folder"], "progress.json")),
+                "progress": _read_json(progress_file),
+                # A file to tail from a background watcher instead of polling this tool.
+                "progress_file": progress_file,
+                "resources": _run_resources(run_id),
                 "heartbeat_age_s": None if age is None else round(age, 1),
                 "note": ("No heartbeat yet: the script has not called ctx.Budget.Check() or "
                          "ctx.Progress(), or EPLAN is busy." if age is None else None)}
@@ -953,7 +957,19 @@ def script_status(run_id: str) -> dict:
     if refused and not result.get("error"):
         result["error"] = refused
     result["state"] = "done"
+    result["resources"] = _run_resources(run_id, with_data=os.path.exists(
+        os.path.join(job["folder"], "result_data.json")))
     return result
+
+
+def _run_resources(run_id: str, with_data: bool = True) -> dict:
+    """The MCP resource URIs of a run. They are templates, so a client cannot list them: the
+    reply has to name them."""
+    uris = {"result": f"eplan-script://runs/{run_id}/result",
+            "progress": f"eplan-script://runs/{run_id}/progress"}
+    if with_data:
+        uris["data"] = f"eplan-script://runs/{run_id}/data"
+    return uris
 
 
 def script_cancel(run_id: str) -> dict:
@@ -991,6 +1007,8 @@ def script_list() -> dict:
                 continue
             scripts.append({"tool": h.get("tool") or f[:-3], "desc": h.get("desc"),
                             "args": h.get("args"), "writes": bool(h.get("writes")),
-                            "needs": h.get("needs", "session"), "path": path})
+                            "needs": h.get("needs", "session"), "path": path,
+                            "source_uri": f"eplan-script://library/{f[:-3]}"})
     return {"success": True, "count": len(scripts), "scripts": scripts,
-            "template": os.path.join(DOTNET_DIR, "scripts", "_template.cs")}
+            "template": os.path.join(DOTNET_DIR, "scripts", "_template.cs"),
+            "guide_uri": "eplan-help://scripting-guide"}

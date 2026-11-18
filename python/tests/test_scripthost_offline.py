@@ -184,12 +184,17 @@ def test_long_run_returns_run_id_then_status(host, monkeypatch):
     use(monkeypatch, Slow())
     out = scripthost.script_run(code="return 1;", wait_seconds=0.1)
     assert out["state"] == "running"
+    # Template resources cannot be listed by a client, so the reply names them.
+    assert out["resources"]["progress"] == f"eplan-script://runs/{out['run_id']}/progress"
+    assert out["progress_file"].endswith("progress.json")
     busy = scripthost.script_run(code="return 2;")
     assert busy["success"] is False and "still running" in busy["error"]
     assert scripthost.script_cancel(out["run_id"])["success"] is True
     gate.set()
     scripthost._jobs[out["run_id"]]["thread"].join(5)
-    assert scripthost.script_status(out["run_id"])["state"] == "done"
+    done = scripthost.script_status(out["run_id"])
+    assert done["state"] == "done"
+    assert done["resources"]["result"] == f"eplan-script://runs/{out['run_id']}/result"
 
 
 def test_no_result_file_is_reported_plainly(host, monkeypatch):
