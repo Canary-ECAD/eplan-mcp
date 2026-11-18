@@ -1,8 +1,8 @@
 """Offline tests for the tool contract (tool_annotations.py, tools.json).
 
 Every published tool must say what it does: the four MCP annotations, set
-explicitly, and the EPLAN facts under _meta["canary-ecad/eplan"]. Clients such
-as Bochica decide from them whether to ask before a call, so a new tool
+explicitly, and the EPLAN facts under _meta["canary-ecad/eplan"]. Clients
+decide from them whether to ask before a call, so a new tool
 without them must fail here rather than reach a release.
 """
 

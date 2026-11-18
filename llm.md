@@ -586,5 +586,5 @@ since the previous one. Extension modules may give their tools facts with a
 `TOOL_FLAGS = {"function_name": "flags"}` dict; without it they carry no
 annotations, which means "may change anything".
 
-These are facts, not policy: a client such as Bochica decides from them when to
+These are facts, not policy: a client decides from them when to
 ask, and may ask more often than they suggest.

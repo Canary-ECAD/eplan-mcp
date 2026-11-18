@@ -1,6 +1,6 @@
 # A tag vX.Y.Z publishes a release: tools.json attached, and notes listing the tools added,
 # removed or re-annotated since the previous tag (tools/release_notes.py). Clients that pin
-# eplan-mcp (Bochica) read those notes before bumping.
+# eplan-mcp read those notes before bumping.
 #
 #   git tag v1.2.3 && git push origin v1.2.3
 name: Release
