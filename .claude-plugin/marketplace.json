@@ -15,8 +15,8 @@
         "source": "github",
         "repo": "Canary-ECAD/eplan-scripting-skill"
       },
-      "description": "EPLAN Electric P8: the router plus the P8 skill (scripting, API and Remote Client) and the two P8 documentation RAG MCP servers. EEC Pro is a separate plugin: install eec-pro as well.",
-      "version": "2.1.0",
+      "description": "EPLAN Electric P8: the eplan-router skill plus the P8 skill (scripting, API and Remote Client) and the two P8 documentation RAG MCP servers. EEC Pro is a separate plugin: install eec-pro as well.",
+      "version": "2.2.0",
       "author": {
         "name": "Canary E-cad",
         "url": "https://github.com/Canary-ECAD"
@@ -27,7 +27,7 @@
       "category": "development",
       "strict": false,
       "skills": [
-        "./router",
+        "./eplan-router",
         "./skills/eplan-p8/eplan-scripting"
       ]
     },
