@@ -29,8 +29,9 @@ Flags, separated by spaces:
     eplan        changesEplan
     destructive  may delete or overwrite work, or is hard to undo
     idempotent   calling it twice with the same arguments does nothing more
-    network      reaches a service outside this machine (the Data Portal through
-                 EPLAN's own sign-in, or a release download): openWorldHint
+    network      reaches a service outside this machine (the Data Portal, through
+                 EPLAN's own sign-in or its web API, or a release download):
+                 openWorldHint
 
 An empty string means: changes something outside the open project (writes an
 export, a backup or a print) or opens, closes or checks it, without deleting
@@ -152,6 +153,12 @@ TOOL_FLAGS = {
     "eplan_create_model_views":                    "project",
     "eplan_dataportal_add_to_download_list":       "network idempotent",
     "eplan_dataportal_search_count":               "read network",
+    "eplan_dataportal_api_find_parts":             "read network idempotent",
+    "eplan_dataportal_api_search_parts":           "read network idempotent",
+    "eplan_dataportal_api_get_part":               "read network idempotent",
+    "eplan_dataportal_api_catalog":                "read network idempotent",
+    "eplan_dataportal_api_download":               "network idempotent",
+    "eplan_dataportal_api_download_list":          "network",
     "eplan_dc_export":                             "idempotent",
     "eplan_dc_import":                             "project",
     "eplan_delete_device_list":                    "project destructive",

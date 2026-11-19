@@ -211,6 +211,15 @@ from .dataportal import (
     dataportal_add_to_download_list,
     dataportal_search_count,
 )
+# Data Portal web API (HTTPS, no EPLAN; downloads need EPLAN_DATAPORTAL_PAT)
+from .dataportal_api import (
+    dataportal_api_find_parts,
+    dataportal_api_search_parts,
+    dataportal_api_get_part,
+    dataportal_api_catalog,
+    dataportal_api_download,
+    dataportal_api_download_list,
+)
 
 # Target project + batched page operations
 from .target import live_set_target_project
@@ -585,6 +594,8 @@ __all__ = [
     'partsmanagement_export_by_properties', 'partsmanagement_export_all',
     # Data Portal
     'dataportal_add_to_download_list', 'dataportal_search_count',
+    'dataportal_api_find_parts', 'dataportal_api_search_parts', 'dataportal_api_get_part',
+    'dataportal_api_catalog', 'dataportal_api_download', 'dataportal_api_download_list',
     # Target project + batched page operations
     'live_set_target_project',
     'live_batch', 'live_find_placements', 'live_place_device', 'live_insert_macro',
