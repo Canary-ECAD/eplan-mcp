@@ -84,15 +84,19 @@ def test_read_tools_change_nothing(tools):
 
 
 def test_only_the_data_portal_tools_talk_to_the_outside_world(tools):
-    # They reach the Data Portal through EPLAN's own sign-in; everything else is local.
+    # They reach the Data Portal, through EPLAN's own sign-in or its web API
+    # (eplan_dataportal_api_*); everything else is local.
     # In discovery mode eplan_tools_call can run them, so it carries the flag too.
     # eplan_script_host_install downloads the script host's release.
     names = {t.name for t in tools}
     expected = (
         ["eplan_tools_call"]
         if "eplan_tools_call" in names
-        else ["eplan_dataportal_add_to_download_list", "eplan_dataportal_search_count",
-              "eplan_script_host_install"]
+        else sorted(["eplan_dataportal_add_to_download_list", "eplan_dataportal_search_count",
+                     "eplan_dataportal_api_catalog", "eplan_dataportal_api_download",
+                     "eplan_dataportal_api_download_list", "eplan_dataportal_api_find_parts",
+                     "eplan_dataportal_api_get_part", "eplan_dataportal_api_search_parts",
+                     "eplan_script_host_install"])
     )
     assert sorted(t.name for t in tools if t.annotations.openWorldHint) == expected
 

@@ -374,10 +374,11 @@ def dataportal_add_to_download_list(parts: list) -> dict:
     create a placeholder part record for something you intend to import.
 
     Args:
-        parts: list of {"part_number": "SIE.5SL6316-7", "dataportal_id": "454767"}.
-            dataportal_id is the number after "id-" in the part's Data Portal web
-            address (dataportal.eplan.com/part-details/<mfr>/<part>/id-<number>).
-            It is required; the action refuses a part number on its own.
+        parts: list of {"part_number": "SIE.5SL6316-7", "dataportal_id": "454767"},
+            or just part numbers ("SIE.5SL6316-7" or {"part_number": ...}). EPLAN's
+            action needs the id; when it is left out it is looked up on the Data
+            Portal web API (dataportal_api_find_parts), and a part it doesn't know
+            stops the call with errorType PartNotFound before anything is queued.
 
     Returns:
         {"success", "executed", "status", "queued": [...], "userAction": "<what to tell the user>"}.
@@ -388,6 +389,28 @@ def dataportal_add_to_download_list(parts: list) -> dict:
     """
     if not parts:
         return {"success": False, "error": "No parts given."}
+    parts = [dict(p) if isinstance(p, dict) else {"part_number": str(p)} for p in parts]
+    # A part given without its id is looked up on the Data Portal web API
+    # (public, no token), so the caller does not have to dig it out of a URL.
+    unresolved = [p["part_number"].strip() for p in parts
+                  if (p.get("part_number") or "").strip() and p.get("dataportal_id") in (None, "")]
+    if unresolved:
+        from . import dataportal_api
+        try:
+            hits = dataportal_api.resolve_ids(unresolved)
+        except dataportal_api.DataPortalError as e:
+            return {"success": False, "error": f"Could not look up the Data Portal ids of {unresolved}: {e}. "
+                                               "Pass dataportal_id for each part."}
+        missing = [pn for pn in unresolved if not hits.get(pn)]
+        if missing:
+            return {"success": False, "errorType": "PartNotFound", "missing": missing,
+                    "error": "Not on Data Portal, nothing was queued: " + ", ".join(missing)}
+        for p in parts:
+            if p.get("dataportal_id") in (None, "") and (p.get("part_number") or "").strip():
+                hit = hits[p["part_number"].strip()]
+                p["dataportal_id"] = str(hit["partid"])
+                # Queue the number Data Portal knows (a bare order number becomes MFR.TYPE).
+                p["part_number"] = hit.get("partnr") or p["part_number"]
     params = {}
     for i, p in enumerate(parts, 1):
         pn, pid = (p.get("part_number") or "").strip(), str(p.get("dataportal_id") or "").strip()

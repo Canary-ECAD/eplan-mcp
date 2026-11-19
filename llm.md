@@ -39,7 +39,7 @@ Use one of these whenever you are unsure of an exact action name or parameter �
 
 ## 2. The local `eplan` action server
 
-It exposes **282 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
+It exposes **288 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](https://covaga.dev/docs/tools/project-and-workspace-management/)):
 
 - **7 script-host tools** (`eplan_script_hello`, `eplan_script_run`,
   `eplan_script_status`, `eplan_script_cancel`, `eplan_script_list`,
@@ -83,7 +83,7 @@ It exposes **282 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
 - **8 connection/utility tools**: `eplan_versions`, `eplan_servers`,
   `eplan_connect`, `eplan_status`, `eplan_ping`, `eplan_test`,
   `eplan_disconnect`, `eplan_list_extensions`.
-- **259 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
+- **265 EPLAN action tools** → `eplan_<action>` (e.g. `eplan_open_project`).
   Includes 2 Data Portal tools that use EPLAN's own Data Portal sign-in:
   `eplan_dataportal_search_count` (read-only) and
   `eplan_dataportal_add_to_download_list`, which only *queues* parts - the
@@ -101,6 +101,23 @@ It exposes **282 tools** (full tool-by-tool reference: [covaga.dev/docs/tools](h
   `next_step` says to have the user finish in that window, not to click it.
   Both are flagged
   `network` (`openWorldHint: true`): they reach the Data Portal.
+  A part given to `eplan_dataportal_add_to_download_list` without its
+  `dataportal_id` (a bare part number or order number is enough) is looked up on
+  the Data Portal web API first; an unknown one stops the call with
+  `errorType: "PartNotFound"` before anything is queued.
+  Includes 6 **Data Portal web API** tools (`eplan_dataportal_api_*`) that call
+  `https://dataportal.eplan.com/api` directly and need **no running EPLAN**:
+  `find_parts` (part/type/order numbers -> Data Portal id and web address, many
+  per call), `search_parts` (full text with filters: manufacturer short name,
+  `data_types` such as `3d_graphical_data`, EPLAN product group, EDS level),
+  `get_part` (texts, product groups, data types, 2D/3D macros with their variant
+  ids) and `catalog` (manufacturer suggestions, product-group tree, data types,
+  standards, totals) are public and read-only. `download` (E3D per 3D macro
+  variant id, DXF zip, commercial-data CSV; saved under the scratch folder, not
+  imported) and `download_list` (list/add/remove on the account's download list)
+  need a Data Portal Personal Access Token in `EPLAN_DATAPORTAL_PAT`, set by a
+  person; without it they return `errorType: "DataPortalTokenMissing"` with a
+  `userAction` to relay. Never ask the user to paste the token into the chat.
   Includes 3 tools that work **only on EPLAN 2027 and later**, built on API
   members new in 2027: `eplan_live_read_terminal_jumpers` (terminal
   jumpers/bridges via `Terminal.GetJumpers`), `eplan_parts_db_export_edz`
@@ -520,6 +537,11 @@ All of these exist as `eplan_*` tools:
 - **EPLAN settings at runtime:** via `eplan_set_setting` /
   `eplan_set_project_setting` (action params `set`/`value`/`index`) or the
   typed `eplan_settings_set_*` scripted tools.
+- **Data Portal token:** `EPLAN_DATAPORTAL_PAT` in the server's environment
+  enables `eplan_dataportal_api_download` / `_download_list`. A person sets it
+  (`python python/install.py -e EPLAN_DATAPORTAL_PAT=...`) and restarts the server; you
+  cannot, and must not ask for the token in the chat. `EPLAN_DATAPORTAL_URL`
+  overrides the API base (default `https://dataportal.eplan.com/api`).
 - **The MCP registration itself:** `python python/install.py` (own `.venv`, registers `eplan`).
 
 ---

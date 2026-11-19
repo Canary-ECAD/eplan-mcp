@@ -545,6 +545,90 @@
       }
     },
     {
+      "name": "eplan_dataportal_api_catalog",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_dataportal_api_download",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_dataportal_api_download_list",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_dataportal_api_find_parts",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_dataportal_api_get_part",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
+      "name": "eplan_dataportal_api_search_parts",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "facts": {
+        "changesProject": false,
+        "runsCode": false,
+        "changesEplan": false
+      }
+    },
+    {
       "name": "eplan_dataportal_search_count",
       "annotations": {
         "readOnlyHint": true,

@@ -122,13 +122,34 @@ def test_queue_reports_the_action_result_and_cleans_up(eplan, tmp_path):
     assert dataportal._pending == {}
 
 
-def test_queue_refuses_a_part_without_a_numeric_id(eplan):
+def test_queue_refuses_a_part_without_a_numeric_id(eplan, monkeypatch):
+    from api.actions import dataportal_api
+    monkeypatch.setattr(dataportal_api, "resolve_ids", lambda values, exact=False: {v: None for v in values})
     result = dataportal.dataportal_add_to_download_list([{"part_number": "DEMO.CT-100"}])
-    assert result["success"] is False
+    assert result["success"] is False and result["errorType"] == "PartNotFound"
+    assert result["missing"] == ["DEMO.CT-100"]
     assert not eplan
     result = dataportal.dataportal_add_to_download_list([{"part_number": "X", "dataportal_id": "id-11"}])
     assert result["success"] is False
     assert dataportal.dataportal_add_to_download_list([])["success"] is False
+
+
+def test_queue_looks_up_a_missing_id_on_the_web_api(eplan, monkeypatch):
+    from api.actions import dataportal_api
+    asked = []
+
+    def resolve(values, exact=False):
+        asked.extend(values)
+        return {"5SL6316-7": {"partid": 454767, "partnr": "SIE.5SL6316-7"}}
+
+    monkeypatch.setattr(dataportal_api, "resolve_ids", resolve)
+    result = dataportal.dataportal_add_to_download_list(["5SL6316-7", {"part_number": "DEMO.CT-200", "dataportal_id": "12"}])
+    assert asked == ["5SL6316-7"]          # a part with its id is not looked up
+    script = eplan[0]
+    assert 'ctx.AddParameter("PARTNR1", "SIE.5SL6316-7");' in script
+    assert 'ctx.AddParameter("PARTID1", "454767");' in script
+    assert 'ctx.AddParameter("PARTID2", "12");' in script
+    assert result["queued"] == ["SIE.5SL6316-7", "DEMO.CT-200"]
 
 
 def test_queue_explains_executed_false(monkeypatch):
