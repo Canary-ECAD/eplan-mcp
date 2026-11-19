@@ -73,3 +73,6 @@ ISSUE_*_PLAN.md
 
 # graphify knowledge graph: local, rebuilt with `graphify update .`
 graphify-out/
+
+# Local experiment notes, not for the repo
+docs/experiments/
